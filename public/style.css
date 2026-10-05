@@ -52,3 +52,14 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .file-diff-content .d2h-code-line ins,.file-diff-content .d2h-code-side-line ins{background:#cee1ba;color:#31502a;text-decoration:none}
 .file-diff-content .d2h-code-line del,.file-diff-content .d2h-code-side-line del{background:#edc8be;color:#813e36;text-decoration:none}
 @media(max-width:700px){dialog.review-dialog{width:calc(100vw - 24px)}.diff-toolbar{align-items:flex-start}.diff-total{display:block;margin:4px 0 0}.file-diff-content{max-height:360px}.diff-column-labels.unified{display:none}}
+/* Reserve only the actual line-number gutter, including on small screens. */
+.file-diff-content .d2h-code-line{box-sizing:border-box;width:100%;padding:0 10px 0 68px}
+.file-diff-content .d2h-code-side-line{box-sizing:border-box;width:100%;padding:0 10px 0 42px}
+.file-diff-content .d2h-code-linenumber{width:60px}
+.file-diff-content .d2h-code-side-linenumber{width:34px}
+.file-diff-content .d2h-code-line-ctn{white-space:pre;overflow-wrap:normal}
+.file-diff-content .d2h-diff-table{min-width:280px}
+.file-diff-content .d2h-file-side-diff .d2h-diff-table{min-width:260px}
+.file-diff-content .d2h-code-linenumber .line-num1,.file-diff-content .d2h-code-linenumber .line-num2{box-sizing:border-box;width:29px;padding:0 4px}
+.file-diff-content .d2h-del.d2h-change{background:#fbefec;border-color:#eed6ce}
+.file-diff-content .d2h-ins.d2h-change{background:#eef5e8;border-color:#d6e5c9}
