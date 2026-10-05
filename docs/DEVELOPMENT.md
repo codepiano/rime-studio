@@ -6,6 +6,7 @@
 
 ```text
 server.js                 本机 HTTP 服务、请求检查、源码读取、部署状态
+connection.js             系统与用户目录发现、连接设置持久化
 config.js                 配置读取、补丁修改、预览、备份及恢复
 review-diff.js            从预览的原始字节生成文件差异
 content.js                按使用目的整理的操作卡与组件说明
@@ -44,6 +45,7 @@ npm start
 | --- | --- | --- |
 | GET | `/health` | 服务身份及进程健康信息 |
 | GET | `/api/state` | 配置、方案、知识卡、历史、写入令牌与部署状态 |
+| POST | `/api/connection` | 校验并保存所选目录，或恢复自动检测；不写 Rime 配置 |
 | POST | `/api/preview` | 校验修改，返回精确文件差异；不写配置 |
 | POST | `/api/apply` | 按预览 ID 保存并备份 |
 | POST | `/api/restore` | 按记录 ID 恢复配置 |
@@ -51,15 +53,16 @@ npm start
 | GET | `/api/deployment` | 部署检查状态 |
 | GET | `/api/source` | 读取白名单内的固定提交源码文件 |
 
-写请求要求 `x-rime-token`。服务检查本机 Host 与 Origin，不允许任意外部来源。令牌随进程生成，不写入仓库。不应绕过这些边界把服务作为公网管理接口。
+写请求要求 `x-rime-token`。配置修改请求还要求当前连接的 `connectionId`，跨目录或缺少身份的请求被拒绝。自动检测到的候选必须确认后才能写入；启动环境变量属于显式指定。服务检查本机 Host 与 Origin，不允许任意外部来源。令牌随进程生成，不写入仓库。不应绕过这些边界把服务作为公网管理接口。
 
 ## 隔离开发
 
-修改读写逻辑时，使用独立用户目录与备份副本，不对日常输入目录试写。
+修改读写逻辑时，使用独立用户目录与工作台数据目录，不对日常输入目录试写。
 
 ```bash
 RIME_USER_DIR=/absolute/path/to/rime-fixture \
 RIME_SHARED_DIR=/absolute/path/to/shared-config \
+RIME_STUDIO_DATA_DIR=/absolute/path/to/studio-test-data \
 RIME_DISABLE_DEPLOY=1 \
 PORT=4320 npm start
 ```
