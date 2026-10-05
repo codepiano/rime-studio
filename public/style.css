@@ -90,3 +90,23 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 @media(max-width:650px){.forget-demo{padding:15px}.forget-heading{flex-wrap:wrap;gap:4px}.forget-option{padding:10px 8px}.forget-actions .primary{width:100%}.forget-steps{gap:5px}.forget-steps span{font-size:10px;padding:5px 6px}}
 .native-instructions{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
 .native-instructions summary{font-size:12px;color:var(--green);cursor:pointer}
+.symbol-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;margin-bottom:25px}
+.symbol-card{border:1px solid var(--line);border-radius:9px;background:#fff;padding:20px;min-width:0}
+.symbol-cardhead{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.symbol-glyph{display:grid;place-items:center;min-width:54px;height:54px;font-size:31px;border-radius:8px;color:#526b3c;background:#edf2e4;letter-spacing:0}
+.symbol-cardhead>div{flex:1;min-width:0}.symbol-cardhead h3{font-size:14px}.symbol-cardhead p{font-size:12px;color:var(--muted);margin-top:5px}
+.symbol-routes{border-top:1px solid var(--line);padding-top:8px;display:grid;gap:5px}
+.symbol-route{display:flex;align-items:center;gap:13px;padding:8px 0}
+.symbol-route>.key{min-width:65px;text-align:center;white-space:nowrap}
+.symbol-route strong{display:block;font-size:12px;font-weight:500;color:#586c46}
+.symbol-route small{display:block;color:var(--muted);font-size:10px;margin-top:5px}
+.symbol-finder{background:#fff;border:1px solid var(--line);border-radius:9px;padding:22px;margin-bottom:25px}
+.symbol-search{display:flex;align-items:center;gap:12px;background:#f4f6ee;border:1px solid #dce3d2;border-radius:7px;padding:11px 14px}
+.symbol-search input{border:0!important;outline:0;background:transparent!important;padding:2px!important;width:100%;color:#556845}
+.symbol-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 23px}
+.symbol-suggestions button{font-size:11px;border:1px solid var(--line);padding:5px 9px;border-radius:5px;color:#7c8a6d}
+.symbol-suggestions button:hover{background:#edf2e4}.symbol-source{font-size:11px;color:var(--muted);margin-top:13px}
+@media(max-width:650px){.symbol-grid{grid-template-columns:1fr}.symbol-card{padding:17px}.symbol-finder{padding:18px}.symbol-finder .settingrow{flex-direction:column;gap:10px}.symbol-glyph{min-width:46px;height:46px;font-size:27px}.symbol-cardhead{gap:12px}}
+.symbol-recommend{font-size:10px;color:#81916e;margin-top:5px}
+.symbol-alternatives{border-top:1px solid var(--line);margin-top:4px;padding-top:9px}
+.symbol-alternatives summary{cursor:pointer;color:var(--muted);font-size:11px}
