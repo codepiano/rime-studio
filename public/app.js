@@ -26,7 +26,7 @@ async function api(url,body){const response=await fetch(url,{method:body?'POST':
 async function refresh(){const next=await api('/api/state');if(queue.length&&next.revision!==S.revision){toast('检测到外部修改，请在预览前重新检查待应用项');}S=next;render();}
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').classList.remove('visible'),4200);}
 const btn=(text,action,classes='',attrs='')=>`<button class="btn ${classes}" data-action="${action}" ${attrs}>${text}</button>`;
-const info=(id)=>`<button class="infoBtn" aria-label="查看说明" data-article="${id}">?</button>`;
+const info=(id)=>`<button class="infoBtn" aria-label="查看说明" data-article="${id}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.4 2.4 0 0 1 4.8 0c0 1.6-2.4 2-2.4 3.5"/><circle class="help-dot" cx="12" cy="16" r=".75"/></svg></button>`;
 const reset=(field,extra={})=>`<button class="reset" data-reset="${field}" ${Object.entries(extra).map(([k,v])=>`data-${k}="${esc(v)}"`).join(' ')}>恢复继承${findQueued(field,extra)?.op==='remove'?' · 待应用':''}</button>`;
 const toggle=(field,label,extra={})=>`<button class="toggle ${value(field,extra)?'on':''}" role="switch" aria-checked="${!!value(field,extra)}" aria-label="${esc(label)}" data-toggle="${field}" ${extra.schema?`data-schema="${esc(extra.schema)}"`:''}></button>`;
 const segments=(field,options,extra={})=>`<div class="segments">${options.map(([v,label])=>`<button class="${value(field,extra)===v?'selected':''}" aria-pressed="${value(field,extra)===v}" data-set="${field}" data-value="${esc(JSON.stringify(v))}" ${extra.schema?`data-schema="${esc(extra.schema)}"`:''}>${label}</button>`).join('')}</div>`;
