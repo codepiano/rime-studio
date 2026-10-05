@@ -63,3 +63,30 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .file-diff-content .d2h-code-linenumber .line-num1,.file-diff-content .d2h-code-linenumber .line-num2{box-sizing:border-box;width:29px;padding:0 4px}
 .file-diff-content .d2h-del.d2h-change{background:#fbefec;border-color:#eed6ce}
 .file-diff-content .d2h-ins.d2h-change{background:#eef5e8;border-color:#d6e5c9}
+.forget-demo{padding:22px;border:1px solid #d8e2cc}
+.forget-heading{display:flex;align-items:start;justify-content:space-between;gap:14px}
+.forget-heading h3{font-size:15px;line-height:1.7}
+.forget-heading .tag{white-space:nowrap}
+.forget-demo>p{font-size:12px;line-height:1.9}
+.forget-demo .key{padding:2px 6px}
+.forget-steps{display:flex;gap:8px;flex-wrap:wrap;margin:17px 0}
+.forget-steps span{font-size:11px;padding:5px 8px;border-radius:5px;background:#e3e9dc;color:#88977c}
+.forget-steps .active{background:#526b3c;color:#fff}
+.forget-steps .done{background:#dce9ce;color:#4a6c34}
+.forget-candidates{padding:7px;border:1px solid #d9e1cf;border-radius:8px;background:#fff;display:grid;gap:6px}
+.forget-option{display:flex;align-items:center;width:100%;gap:12px;text-align:left;padding:12px;border:1px solid transparent;border-radius:6px;min-height:64px}
+.forget-option:hover{background:#f4f6ef}
+.forget-option.selected{background:#e5eedb;border-color:#8ba873;box-shadow:inset 3px 0 #617f47}
+.forget-number{width:18px;color:#8b997e;font-size:12px;text-align:center}
+.forget-word{flex:1;font-size:20px;font-weight:500}
+.forget-word small{display:block;color:#7a876d;font-size:10px;font-weight:400;margin-top:4px}
+.forget-selected{font-size:11px;color:#486934;font-weight:600;white-space:nowrap}
+.forget-status{padding:15px 16px;margin-top:15px;border:1px solid #d7dfcd;border-radius:7px;background:#f7f9f2}
+.forget-status strong{font-size:13px;color:#4e643b;font-weight:550}
+.forget-status p{font-size:12px;color:#76836a;margin-top:5px;line-height:1.8}
+.forget-status.success{background:#e3eed8;border-color:#b8cea1}
+.forget-actions{display:flex;align-items:center;gap:12px;margin-top:15px;flex-wrap:wrap}
+.forget-demo .forget-note{margin-top:14px;font-size:10px;color:#8b967e;line-height:1.8}
+@media(max-width:650px){.forget-demo{padding:15px}.forget-heading{flex-wrap:wrap;gap:4px}.forget-option{padding:10px 8px}.forget-actions .primary{width:100%}.forget-steps{gap:5px}.forget-steps span{font-size:10px;padding:5px 6px}}
+.native-instructions{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+.native-instructions summary{font-size:12px;color:var(--green);cursor:pointer}
