@@ -1,1 +1,1 @@
-{"name":"rime-studio","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node server.js","test":"node --test test/config.test.js"},"dependencies":{"express":"^5.1.0","yaml":"^2.8.1"}}
+{"name":"rime-studio","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node server.js","test":"node --test test/*.test.js"},"dependencies":{"diff":"^9.0.0","diff2html":"^3.4.56","express":"^5.1.0","yaml":"^2.8.1"}}

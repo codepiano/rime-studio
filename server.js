@@ -8,6 +8,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {ConfigStore} from './config.js';
 import {articles,components} from './content.js';
+import {withFileDiff} from './review-diff.js';
 const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url));
 const port=Number(process.env.PORT||4319),userDir=process.env.RIME_USER_DIR||path.join(os.homedir(),'Library','Rime');
 const sharedDir=process.env.RIME_SHARED_DIR||'/Library/Input Methods/Squirrel.app/Contents/SharedSupport';
@@ -37,7 +38,7 @@ for(const repo of repos){if(offlineSources[repo.id]){repo.commit=offlineSources[
 let version='未知';try{version=(await fs.readFile('/Library/Input Methods/Squirrel.app/Contents/Info.plist','utf8')).match(/<key>CFBundleVersion<\/key>\s*<string>(.*?)<\/string>/)?.[1]||version;}catch{}
 app.get('/health',route(async()=>({ok:true,service:'rime-studio',pid:process.pid})));
 app.get('/api/state',route(async()=>({...(await store.snapshot()),token,version,deployment,fields:undefined,articles,components,repos:repos.map(x=>({...x}))})));
-app.post('/api/preview',route(async req=>store.preview(req.body.changes,req.body.revision)));
+app.post('/api/preview',route(async req=>withFileDiff(await store.preview(req.body.changes,req.body.revision))));
 app.post('/api/apply',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再保存');return store.apply(req.body.id);}));
 app.post('/api/restore',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再恢复');return store.restore(req.body.id);}));
 app.get('/api/source',route(async req=>{const repo=repos.find(r=>r.id===req.query.repo);if(!repo?.available||!repo.files.includes(req.query.file))throw new Error('源码文件不在浏览清单内');let stdout=offlineSources[repo.id]?.files[req.query.file];if(stdout===undefined)({stdout}=await exec('git',['-C',path.join(sourceRoot,repo.id),'show',`${repo.commit}:${req.query.file}`],{maxBuffer:2*1024*1024}));return {text:stdout,commit:repo.commit,url:repo.id==='rime-wiki'?`${repo.url}/${String(req.query.file).replace('.md','')}`:`${repo.url}/blob/${repo.commit}/${req.query.file}`};}));
@@ -57,6 +58,8 @@ app.post('/api/deploy',route(async()=>{
   deployment={state:'unconfirmed',message:'请求已发送，但未观察到足够的编译更新。请从系统输入法菜单重新部署并查看日志；未宣称设置已生效。'};
  }catch(e){deployment={state:'failed',message:`部署未完成：${e.message}`};}})();return deployment;
 }));
+app.get('/vendor/diff2html.min.js',(req,res)=>res.sendFile(path.join(root,'node_modules/diff2html/bundles/js/diff2html.min.js')));
+app.get('/vendor/diff2html.min.css',(req,res)=>res.sendFile(path.join(root,'node_modules/diff2html/bundles/css/diff2html.min.css')));
 app.use(express.static(path.join(root,'public')));
 app.use((e,req,res,next)=>res.status(e.status||400).json({error:e.message||'操作失败'}));
 app.listen(port,'127.0.0.1',()=>console.log(`Rime Studio ready: http://127.0.0.1:${port}`));
