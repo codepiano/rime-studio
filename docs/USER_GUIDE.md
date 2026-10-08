@@ -115,10 +115,10 @@
 
 “方案与词库 → 获取和更新方案”下方增加 plum 入口。填写配方名称，或点击默认方案集、双拼、五笔、粤拼、表情符号等快捷项，然后点击“通过 plum 准备并预览”。可输入多个配方，以空格分隔。
 
-示例：`:preset`、`double-pinyin`、`wubi pinyin-simp`、`iDvel/rime-ice@main`、`gaboolic/rime-frost@master`。也支持简单配方参数，例如 `emoji emoji:customize:schema=luna_pinyin`，将 Emoji 资源接到朙月拼音。
+示例：`:preset`、`double-pinyin`、`wubi pinyin-simp`、`iDvel/rime-ice@main`、`gaboolic/rime-frost@master:others/recipes/full`。也支持简单配方参数，例如 `emoji emoji:customize:schema=luna_pinyin`，将 Emoji 资源接到朙月拼音。
 
 这里填写的是配方名称，不是 README 里的整条终端命令。知键固定调用官方 `rime-install`，把目标目录明确指定为暂存目录；准备完成后才展示修改。保存仍通过知键的备份和外部修改检查，之后单独部署。启用与排序在“输入方案”里调整；配方自身若改变方案菜单，也会出现在预览中。
 
-雾凇、白霜的上方按钮继续使用专门适配。通过 plum 安装它们时，会按已知方案规则补齐上游配方遗漏的词库、Lua、OpenCC 或模型数据。已有个人 `custom_phrase.txt` 保留；其他配方可能修改 `.custom.yaml`，请核对预览。
+雾凇、白霜的上方按钮继续使用专门适配。通过 plum 安装白霜时使用官方 `others/recipes/full` 配方。只输入白霜仓库名或 `@master` 也会解析到这个入口；显式指定其他配方时保留用户选择。不再笼统复制整个仓库目录作为补齐。完整配方不一定包含全部模型或增强功能资源，缺少依赖会拒绝保存。已有个人 `custom_phrase.txt` 保留；其他配方可能修改 `.custom.yaml`，请核对预览。
 
 目前支持官方 `:preset`／`:extra`／`:all`、GitHub 仓库、分支和简单 ASCII 键值参数。不接受任意终端命令、直接 URL、外部 packages.conf 或安装器自更新；也不会自动应用文件删除。特殊配方依赖的额外工具、插件及高级配置读写可能不受支持，失败时不会自动回退为直接修改真实目录。
