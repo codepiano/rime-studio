@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import YAML from 'yaml';
 import {digest,readText} from './file-transactions.js';
 const exec=promisify(execFile),fail=message=>{throw new Error(message);};
-const valid=name=>typeof name==='string'&&/^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,100}$/.test(name)&&!name.includes('..');
+const valid=name=>typeof name==='string'&&/^[\p{L}\p{N}_][\p{L}\p{N}_. -]{0,100}$/u.test(name)&&!name.includes('..');
 const rowId=(name,code,text)=>digest(name+'\0'+code+'\0'+text);
 const sourceFile=fileURLToPath(new URL('./native/db-lock.c',import.meta.url));
 export function parseSnapshot(text,name){
@@ -21,7 +21,7 @@ export function parseSnapshot(text,name){
   const count=Number(values.c);if(!Number.isSafeInteger(count)||word.length>2000||code.length>2000)fail('学习词条超出限制');
   rows.push({id:rowId(name,code,word),dictionary:name,text:word,code,count,deleted:count<0});
  }
- if(meta.db_type!=='userdb'||meta.db_name?.replace(/\.userdb(?:\.txt)?$/,'')!==name)fail('快照与所选学习词典不匹配');
+ if(meta.db_type!=='userdb'||(meta.db_name!==name&&meta.db_name?.replace(/\.userdb(?:\.txt)?$/,'')!==name))fail('快照与所选学习词典不匹配');
  if(new Set(rows.map(row=>row.id)).size!==rows.length)fail('学习词条重复');
  const basis=Object.entries(meta).sort().map(([k,v])=>`${k}\t${v}`).join('\n')+'\n'+text.split(/\r?\n/).filter(line=>line&&!line.startsWith('#')).sort().join('\n');
  return {meta,rows,hash:digest(basis)};
@@ -75,7 +75,7 @@ export class LearnedManager{
  async dump(name){
   await fs.mkdir(this.workDir,{recursive:true,mode:0o700});const job=await fs.mkdtemp(path.join(this.workDir,'read-')),table=path.join(job,'export.txt');
   try{
-   await this.locked(name,this.store.userDir,['--export',name,table]);const exported=await fs.readFile(table,'utf8'),userId=exported.match(/^#@\/user_id\t(.*)$/m)?.[1];if(!userId||!/^[a-zA-Z0-9_.-]{1,120}$/.test(userId)||userId.includes('..'))fail('学习词典用户身份无效');
+   await this.locked(name,this.store.userDir,['--export',name,table]);const exported=await fs.readFile(table,'utf8'),userId=exported.match(/^#@\/user_id\t(.*)$/m)?.[1];if(!userId||!/^[\p{L}\p{N}_. -]{1,120}$/u.test(userId)||userId.includes('..'))fail('学习词典用户身份无效');
    const dir=await this.dbDir(name),basis=await treeHash(dir);await fs.symlink(dir,path.join(job,name+'.userdb'),'dir');await fs.writeFile(path.join(job,'installation.yaml'),YAML.stringify({installation_id:userId,sync_dir:path.join(job,'sync')}),{mode:0o600});
    await this.locked(name,job,['--backup',name],async current=>{if(await treeHash(current)!==basis)fail('学习词典在读取期间发生变化，请重试');});
    const full=path.join(job,'sync',userId,name+'.userdb.txt');if(!path.resolve(full).startsWith(path.resolve(job)+path.sep))fail('学习词典身份路径无效');const text=await fs.readFile(full,'utf8');if(Buffer.byteLength(text)>32*1024*1024)fail('词典超过 32 MB 读取限制');
@@ -131,7 +131,7 @@ export class LearnedManager{
   const groups=record.groups.filter(group=>group.started);if(!groups.length)fail('这次记录没有已开始的数据修改');
   for(const group of groups){const now=await this.dump(group.name);if((record.pending||record.uncertain)?!compatibleDeletion(group,now):now.hash!==group.afterHash)fail('学习词典后来又有变化，不能直接覆盖恢复');}
   const completed=[];
-  try{for(const group of groups){const basis=await treeHash(await this.dbDir(group.name));await this.locked(group.name,this.store.userDir,[],async db=>{if(await treeHash(db)!==basis)fail('恢复前发现词典变化');await copyDatabase(db,path.join(dir,group.name+'-after'));await replaceDatabase(path.join(dir,group.name),db);});completed.push(group);}}
+  try{for(const group of groups){const basis=await treeHash(await this.dbDir(group.name));await this.locked(group.name,this.store.userDir,[],async db=>{if(await treeHash(db)!==basis)fail('恢复前发现词典变化');await copyDatabase(db,path.join(dir,group.name+'-after'));completed.push(group);await replaceDatabase(path.join(dir,group.name),db);});}}
   catch(error){for(const group of completed.reverse())try{await this.locked(group.name,this.store.userDir,[],db=>replaceDatabase(path.join(dir,group.name+'-after'),db));}catch{}throw error;}
   for(const group of groups)if((await this.dump(group.name)).hash!==group.beforeHash)fail('恢复结果未通过校验，请保留备份');record.pending=false;record.uncertain=false;record.restored=new Date().toISOString();await fs.writeFile(path.join(dir,'record.json'),JSON.stringify(record),{mode:0o600});for(const group of groups)this.cache.set(group.name,{name:group.name,...await this.dump(group.name),error:''});return {message:'已恢复删除前的学习词典，重新启用鼠须管即可使用',requiresDeploy:false};
  }
