@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import YAML from 'yaml';
+import {applyFiles,restoreFiles} from './file-transactions.js';
 const hash = s => crypto.createHash('sha256').update(s).digest('hex');
 const clone = x => structuredClone(x);
 const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
@@ -95,7 +96,7 @@ export class ConfigStore {
   if(!files.length)bad('没有需要写入的修改');const id=crypto.randomUUID();const preview={id,revision:snap.revision,files,summary,created:Date.now()};this.previews.set(id,preview);for(const [k,p] of this.previews)if(Date.now()-p.created>600000)this.previews.delete(k);return preview;
  }
  async apply(id) { if(this.busy)bad('另一个配置操作正在进行');this.busy=true;try{
-  const p=this.previews.get(id);if(!p||Date.now()-p.created>600000)bad('预览已过期，请重新预览');const snap=await this.snapshot();if(snap.revision!==p.revision)bad('配置已变化，请重新预览');
+  const p=this.previews.get(id);if(!p||Date.now()-p.created>600000)bad('预览已过期，请重新预览');if(p.kind==='resources')return await applyFiles(this,p);const snap=await this.snapshot();if(snap.revision!==p.revision)bad('配置已变化，请重新预览');
   const dir=path.join(this.dataDir,crypto.randomUUID());await fs.mkdir(dir,{recursive:true,mode:0o700});const record={id:path.basename(dir),time:new Date().toISOString(),summary:p.summary,files:p.files.map(f=>({...f,afterHash:hash(f.after)}))};
   await fs.writeFile(path.join(dir,'record.json'),JSON.stringify(record,null,2),{mode:0o600});
   const written=[];try{for(const f of p.files){const dest=path.join(this.userDir,f.file);if((await this.readFile(dest)).text!==f.before)bad('写入前发现配置变化');await this.atomicWrite(dest,f.after);written.push(f);}}catch(e){for(const f of written){const dest=path.join(this.userDir,f.file);if((await this.readFile(dest)).text===f.after){if(f.before)await this.atomicWrite(dest,f.before);else await fs.unlink(dest);}}record.failed=true;await fs.writeFile(path.join(dir,'record.json'),JSON.stringify(record),{mode:0o600});throw e;}
@@ -103,5 +104,5 @@ export class ConfigStore {
  }finally{this.busy=false;} }
  async atomicWrite(dest,text){const tmp=`${dest}.rime-studio-${crypto.randomUUID()}`;await fs.writeFile(tmp,text,{mode:0o600,flag:'wx'});try{await fs.rename(tmp,dest);}finally{await fs.unlink(tmp).catch(()=>{});} }
  async history(){const dirs=await fs.readdir(this.dataDir).catch(()=>[]);const result=[];for(const id of dirs.filter(x=>/^[0-9a-f-]{36}$/.test(x))){try{const r=JSON.parse(await fs.readFile(path.join(this.dataDir,id,'record.json'),'utf8'));if(!r.failed)result.push({id:r.id,time:r.time,summary:r.summary,restored:r.restored});}catch{}}return result.sort((a,b)=>b.time.localeCompare(a.time)).slice(0,20);}
- async restore(id){if(!/^[0-9a-f-]{36}$/.test(id))bad('无效备份');if(this.busy)bad('另一个操作正在进行');this.busy=true;try{const dir=path.join(this.dataDir,id);const r=JSON.parse(await fs.readFile(path.join(dir,'record.json'),'utf8'));if(r.failed||r.restored)bad('此记录不可恢复');for(const f of r.files)if(hash((await this.readFile(path.join(this.userDir,f.file))).text)!==f.afterHash)bad('这些配置后来又被修改，不能直接覆盖恢复');const originals=[];try{for(const f of r.files){const dest=path.join(this.userDir,f.file);if(f.before)await this.atomicWrite(dest,f.before);else await fs.unlink(dest);originals.push(f);}}catch(e){for(const f of originals)await this.atomicWrite(path.join(this.userDir,f.file),f.after);throw e;}r.restored=new Date().toISOString();await fs.writeFile(path.join(dir,'record.json'),JSON.stringify(r,null,2),{mode:0o600});return {message:'已恢复修改前配置，请重新部署'};}finally{this.busy=false;}}
+ async restore(id){if(!/^[0-9a-f-]{36}$/.test(id))bad('无效备份');if(this.busy)bad('另一个操作正在进行');this.busy=true;try{const dir=path.join(this.dataDir,id);const r=JSON.parse(await fs.readFile(path.join(dir,'record.json'),'utf8'));if(r.failed||r.restored)bad('此记录不可恢复');if(r.kind==='resources')return await restoreFiles(this,r,dir);for(const f of r.files)if(hash((await this.readFile(path.join(this.userDir,f.file))).text)!==f.afterHash)bad('这些配置后来又被修改，不能直接覆盖恢复');const originals=[];try{for(const f of r.files){const dest=path.join(this.userDir,f.file);if(f.before)await this.atomicWrite(dest,f.before);else await fs.unlink(dest);originals.push(f);}}catch(e){for(const f of originals)await this.atomicWrite(path.join(this.userDir,f.file),f.after);throw e;}r.restored=new Date().toISOString();await fs.writeFile(path.join(dir,'record.json'),JSON.stringify(r,null,2),{mode:0o600});return {message:'已恢复修改前配置，请重新部署'};}finally{this.busy=false;}}
 }
