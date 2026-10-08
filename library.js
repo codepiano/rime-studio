@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
 import {digest,readText,safeFile,previewFiles} from './file-transactions.js';
+import {managedContext,managedChanges,activeTables,managementState} from './dictionary-management.js';
 const fail = message => { throw new Error(message); };
 const identifier = /^[a-z][a-z0-9_]*$/;
 const tableName = /^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/;
@@ -65,7 +66,7 @@ export async function inventory(store) {
     try {const header=await headerFile(root,file);dictionaries.push({file,origin,name:header.data.name,version:String(header.data.version||''),imports:header.imports,bytes:header.bytes});}
     catch(error){dictionaries.push({file,origin,error:error.message});}
   }
-  const schemas=snapshot.schemas.map(schema=>{const cfg=configFor(schema);return {id:schema.id,name:schema.name,dictionary:cfg.translator?.dictionary||'',phrases:phraseFiles(schema),source:schema.deployed?'deployed':'source'};});
+  const registry=(await managementState(store)).data;const schemas=[];for(const schema of snapshot.schemas){const cfg=schema.config;let tables=[],error='';try{tables=await activeTables(store,schema);}catch(e){error=e.message;}schemas.push({id:schema.id,name:schema.name,dictionary:cfg.translator?.dictionary||'',phrases:phraseFiles(schema),source:'source',originalDictionary:cfg.translator?.dictionary===`studio_${schema.id}_extended`?(registry.schemas?.[schema.id]?.original||tables[1]||cfg.translator.dictionary):(cfg.translator?.dictionary||''),tables,error});}
   return {dictionaries,schemas};
 }
 export async function readDictionary(store,file,query='',offset=0) {
@@ -131,37 +132,13 @@ export async function previewPhrases(store, body) {
   return previewFiles(store,changes,[{title:'快捷短语',schema:body.schema,file:current.file}],{type:'phrases'},revision);
 }
 export async function previewPersonalDictionary(store,body) {
-  if(!identifier.test(body.schema||''))fail('无效方案');
-  const rows=validateRows(body.text);if(!rows.length)fail('请至少填写一个词条');
-  const {schema,snapshot}=await selected(store,body.schema),cfg=configFor(schema),dictionary=cfg.translator?.dictionary;
-  if(!editableName(dictionary||''))fail('此方案没有可扩展的主词库');
-  const name=`studio_${body.schema}_personal`,wrapper=`studio_${body.schema}_extended`,file=name+'.dict.yaml',wrapperFile=wrapper+'.dict.yaml';
-  const current=await readText(store.userDir,file);
-  if(body.hash!==digest(current.text)||body.exists!==current.exists)fail('个人词库已变化，请重新读取');
-  const own=await readText(store.userDir,wrapperFile);
-  let original=dictionary;
-  if(dictionary===wrapper){if(!own.exists)fail('扩展词库引用缺失');const imports=dictionaryHeader(own.text).imports;original=imports.find(x=>x!==name);if(!original)fail('扩展词库缺少基础词库');}
-  else if(own.exists)fail('同名扩展词库已存在，请先处理冲突');
-  // Only extend ordinary text/code/weight dictionaries; tone and auxiliary encodings are user supplied.
-  let base=await readText(store.userDir,original+'.dict.yaml');if(!base.exists)base=await readText(store.sharedDir,original+'.dict.yaml');
-  if(!base.exists)fail('基础词库不存在');
-  const header=dictionaryHeader(base.text);
-  if(header.columns.some(x=>!['text','code','weight'].includes(x))||!header.columns.includes('code'))fail('此词库使用特殊列结构，暂不支持个人扩展');
-  const custom=`${body.schema}.custom.yaml`,source=await readText(store.userDir,custom);
-  const after=`# 由知键维护的个人词库\n---\nname: ${name}\nversion: "1"\nsort: by_weight\ncolumns: [text, code, weight]\n...\n`+rows.map(row=>[row.text,row.code,row.weight||'100'].join('\t')).join('\n')+'\n';
-  const tables=[],guards=[],visited=new Set(),visiting=new Set();
-  async function expand(table){
-    if(visiting.has(table))fail('词库引用存在循环');if(visited.has(table))return;
-    visiting.add(table);let origin='user',resource=await readText(store.userDir,table+'.dict.yaml');if(!resource.exists){origin='shared';resource=await readText(store.sharedDir,table+'.dict.yaml');}if(!resource.exists)fail(`缺少词库依赖 ${table}`);
-    const parsed=dictionaryHeader(resource.text);tables.push(table);guards.push({origin,file:table+'.dict.yaml',exists:true,hash:digest(resource.text)});
-    for(const dependency of parsed.imports)await expand(dependency);
-    visiting.delete(table);visited.add(table);
-  }
-  await expand(original);
-  // librime reads the listed tables; listing only an aggregate dictionary loses its imports.
-  const wrapperText=YAML.stringify({...header.data,name:wrapper,version:'1',import_tables:[...tables,name]});
-  return previewFiles(store,[{file,after,expected:{hash:digest(current.text),exists:current.exists}},{file:wrapperFile,after:'# 独立扩展入口，保留上游词库\n---\n'+wrapperText+'...\n',expected:{hash:digest(own.text),exists:own.exists}},{file:custom,after:patchText(source.text,{'translator/dictionary':wrapper,'translator/user_dict':cfg.translator?.user_dict||original}),expected:{hash:digest(source.text),exists:source.exists}}],[{title:'个人扩展词库',schema:body.schema,file}],{type:'personal-dictionary'},snapshot.revision,guards);
+ if(!identifier.test(body.schema||''))badSchema();const rows=validateRows(body.text),context=await managedContext(store,body.schema),name=context.personal,file=name+'.dict.yaml',current=await readText(store.userDir,file);
+ if(!rows.length&&!current.exists)fail('没有需要保存的个人词条');if(body.hash!==digest(current.text)||body.exists!==current.exists)fail('个人词库已变化，请重新读取');
+ if(context.base.header.columns.some(x=>!['text','code','weight'].includes(x))||!context.base.header.columns.includes('code'))fail('此词库使用特殊列结构，暂不支持个人扩展');
+ const after=`# 由知键维护的个人词库\n---\nname: ${name}\nversion: "1"\nsort: by_weight\ncolumns: [text, code, weight]\n...\n`+rows.map(row=>[row.text,row.code,row.weight||'100'].join('\t')).join('\n')+'\n',virtual=new Map([[name,after]]),planned=await managedChanges(store,context,{virtual,personalExists:true});
+ return previewFiles(store,[{file,after,expected:{hash:digest(current.text),exists:current.exists}},...planned.changes],[{title:rows.length?'个人扩展词库':'清空个人扩展词库',schema:body.schema,file}],{type:'personal-dictionary'},context.snapshot.revision,planned.guards);
 }
+function badSchema(){fail('无效方案');}
 export async function readPersonalDictionary(store,id) {
   await selected(store,id);if(!identifier.test(id))fail('无效方案');
   const file=`studio_${id}_personal.dict.yaml`,source=await readText(store.userDir,file);

@@ -50,3 +50,9 @@ test('library APIs bind resource writes to connection identity and enforce input
  const two=await dirs(app.dir,'library-two');await app.request('/api/connection',two,state.token);
  assert.equal((await app.request('/api/library/phrases/preview',payload,state.token)).status,400);
 });
+test('standalone dictionary install handles larger files and preserves write protection',async t=>{
+ const app=await launch(t),initial=(await app.request('/api/state')).data,one=await dirs(app.dir,'dictionary-large');await fs.writeFile(path.join(one.userDir,'test.schema.yaml'),'schema: {schema_id: test, name: 测试}\ntranslator: {dictionary: base}\n');await fs.writeFile(path.join(one.sharedDir,'base.dict.yaml'),'---\nname: base\n...\n你好\tni hao\t100\n');const state=(await app.request('/api/connection',one,initial.token)).data;
+ const payload={text:'---\nname: imported\n...\n'+Array.from({length:18000},(_,i)=>`词${i}\tci\t100`).join('\n'),schema:'test',activate:true,connectionId:state.connection.id};assert.ok(Buffer.byteLength(payload.text)>150000);
+ assert.equal((await app.request('/api/library/install/preview',payload,'bad')).status,403);const preview=await app.request('/api/library/install/preview',payload,state.token);assert.equal(preview.status,200);const save=await app.request('/api/apply',{id:preview.data.id,connectionId:state.connection.id},state.token);assert.equal(save.status,200);assert.equal((await app.request('/api/library')).data.schemas[0].tables.includes('imported'),true);
+ const bad=await app.request('/api/library/manage/preview',{action:'delete',file:'../outside.dict.yaml',hash:'x',connectionId:state.connection.id},state.token);assert.equal(bad.status,400);assert.equal((await app.request('/api/learned/lifecycle',{action:'pause',connectionId:state.connection.id},state.token)).status,400);
+});

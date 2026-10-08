@@ -61,8 +61,8 @@ export async function previewFiles(store, changes, summary, metadata = {}, expec
 export function presentPreview(preview) {
   const countLines = text => text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0;
   return {...preview, files:preview.files.map(f => {
-    const detail = f.file!=='.rime-studio-packages.json' && f.encoding!=='base64' && Buffer.byteLength(f.before) + Buffer.byteLength(f.after) <= 64000 && countLines(f.before) + countLines(f.after) <= 2000;
-    const common = {file:f.file, isNew:!f.beforeExists, isDeleted:f.afterExists === false, record:f.file==='.rime-studio-packages.json', binary:f.encoding==='base64', beforeBytes:sizeOf(f.before,f.encoding), afterBytes:sizeOf(f.after,f.encoding), beforeHash:digest(f.before,f.encoding), afterHash:digest(f.after,f.encoding)};
+    const detail = !['.rime-studio-packages.json','.rime-studio-dictionaries.json'].includes(f.file) && f.encoding!=='base64' && Buffer.byteLength(f.before) + Buffer.byteLength(f.after) <= 64000 && countLines(f.before) + countLines(f.after) <= 2000;
+    const common = {file:f.file, isNew:!f.beforeExists, isDeleted:f.afterExists === false, record:['.rime-studio-packages.json','.rime-studio-dictionaries.json'].includes(f.file), binary:f.encoding==='base64', beforeBytes:sizeOf(f.before,f.encoding), afterBytes:sizeOf(f.after,f.encoding), beforeHash:digest(f.before,f.encoding), afterHash:digest(f.after,f.encoding)};
     if (detail) return {...withFileDiff({files:[f]}).files[0], ...common};
     return {...common, summaryOnly:true, additions:0, deletions:0, beforeLines:f.encoding==='base64'?0:countLines(f.before), afterLines:f.encoding==='base64'?0:countLines(f.after)};
   })};

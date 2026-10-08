@@ -6,6 +6,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {ConfigStore} from './config.js';
+import {previewDictionaryInstall,previewDictionaryAction,dictionaryReferences} from './dictionary-management.js';
 import {LearnedManager} from './learned.js';
 import {inventory,readDictionary,readPhrases,previewPhrases,readPersonalDictionary,previewPersonalDictionary} from './library.js';
 import {catalog,packageState,PackageDownloads} from './packages.js';
@@ -40,6 +41,7 @@ app.use((req,res,next)=>{
  res.set('X-Content-Type-Options','nosniff');
  if(req.method!=='GET'&&req.headers['x-rime-token']!==token)return res.status(403).json({error:'请从本地界面操作'});next();
 });
+app.use('/api/library/install/preview',express.json({limit:'25mb'}));
 app.use(express.json({limit:'150kb'}));
 const route=fn=>async(req,res,next)=>{try{res.json(await fn(req,res));}catch(e){next(e);}};
 let deployment={state:'idle',message:'尚未发起部署'};
@@ -79,6 +81,9 @@ app.post('/api/learned/refresh',route(async req=>({...await resourceStore(req).l
 app.post('/api/learned/preview',route(async req=>resourceStore(req).learned.preview(req.body)));
 app.get('/api/learned/export',route(async req=>{const manager=readableStore().learned,data=manager.query({dictionary:req.query.dictionary||'',q:req.query.q||''});const rows=[...manager.cache.values()].filter(x=>!req.query.dictionary||x.name===req.query.dictionary).flatMap(x=>x.rows).filter(x=>!x.deleted&&(!req.query.q||x.text.includes(req.query.q)||x.code.includes(req.query.q)));return {filename:'学习词条.tsv',text:'# 文字\t完整编码\t使用次数\t学习词典\n'+rows.map(x=>[x.text,x.code,x.count,x.dictionary].join('\t')).join('\n')+'\n'};}));
 app.get('/api/library',route(async()=>inventory(readableStore())));
+app.get('/api/library/references',route(async req=>dictionaryReferences(readableStore(),String(req.query.file||'').replace(/\.dict\.yaml$/,''))));
+app.post('/api/library/manage/preview',route(async req=>previewDictionaryAction(resourceStore(req),req.body)));
+app.post('/api/library/install/preview',route(async req=>previewDictionaryInstall(resourceStore(req),req.body)));
 app.get('/api/library/dictionary',route(async req=>readDictionary(readableStore(),req.query.file,req.query.q||'',Number(req.query.offset||0))));
 app.get('/api/library/phrases',route(async req=>readPhrases(readableStore(),req.query.schema)));
 app.get('/api/library/personal',route(async req=>readPersonalDictionary(readableStore(),req.query.schema)));
