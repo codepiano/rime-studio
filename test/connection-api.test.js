@@ -18,6 +18,19 @@ async function launch(t,extra={}){
  return {dir,base,async request(url,body,token){const response=await fetch(base+url,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json','x-rime-token':token}:{},body:body?JSON.stringify(body):undefined});return {status:response.status,data:await response.json()};}};
 }
 async function dirs(dir,name){const user=path.join(dir,name),shared=path.join(dir,'shared');await fs.mkdir(user);await fs.mkdir(shared,{recursive:true});await fs.writeFile(path.join(shared,'default.yaml'),'menu: {page_size: 5}\nschema_list: [{schema: test}]\n');await fs.writeFile(path.join(shared,'squirrel.yaml'),'style: {font_point: 16}\n');await fs.writeFile(path.join(user,'test.schema.yaml'),'schema: {schema_id: test, name: test}\n');return {userDir:user,sharedDir:shared};}
+test('runtime metrics identify the live service and distinguish manual from managed startup',async t=>{
+ for(const managed of [false,true]){
+  const app=await launch(t,{RIME_STUDIO_MANAGED:managed?'1':'0'});
+  const response=await fetch(app.base+'/control-panel/metrics');
+  const metrics=await response.json();
+  assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.equal(metrics.status,'running');assert.equal(metrics.runtimeMode,'development');
+  assert.equal(metrics.processMode,managed?'managed':'observed');
+  assert.equal(metrics.pid,(await app.request('/health')).data.pid);
+  assert.ok(Number.isFinite(Date.parse(metrics.updatedAt)));assert.ok(metrics.uptimeSec>0);
+  assert.ok(metrics.memory.rssBytes>0);assert.ok(metrics.memory.heapUsedBytes>0);
+ }
+});
 test('setup, invalid path rejection, persistence, and directory switching are isolated',async t=>{
  const app=await launch(t),initial=(await app.request('/api/state')).data;assert.equal(typeof initial.connection.ready,'boolean');assert.ok(initial.token);
  const invalid=await app.request('/api/connection',{userDir:'/nonexistent/rime-studio-fixture',sharedDir:'/nonexistent/resources'},initial.token);assert.equal(invalid.status,400);await assert.rejects(fs.stat(path.join(app.dir,'data/settings.json')),/ENOENT/);

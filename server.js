@@ -10,7 +10,9 @@ import {articles,components} from './content.js';
 import {withFileDiff} from './review-diff.js';
 import {discoverConnection,loadPreferences,savePreferences,backupDirectory,resolveDirectory} from './connection.js';
 const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url));
-const port=Number(process.env.PORT||4319);
+const manifest=JSON.parse(await fs.readFile(path.join(root,'control-panel.json'),'utf8'));
+const port=Number(process.env.PORT||manifest.ports[0]);
+if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT 必须是 1 到 65535 的整数');
 const sourceRoot=process.env.RIME_SOURCE_DIR||path.resolve(root,'../../work');
 const dataDir=process.env.RIME_STUDIO_DATA_DIR||path.join(root,'.data');
 const preferencesFile=path.join(dataDir,'settings.json');
@@ -26,7 +28,7 @@ const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`];
 app.use((req,res,next)=>{
  if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(req.headers.host))return res.status(403).json({error:'只允许本机访问'});
  if(req.headers.origin&&!origins.includes(req.headers.origin))return res.status(403).json({error:'来源不受信任'});
- if(req.path.startsWith('/api/'))res.set('Cache-Control','no-store');
+ if(req.path.startsWith('/api/')||req.path==='/control-panel/metrics')res.set('Cache-Control','no-store');
  res.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
  res.set('X-Content-Type-Options','nosniff');
  if(req.method!=='GET'&&req.headers['x-rime-token']!==token)return res.status(403).json({error:'请从本地界面操作'});next();
@@ -43,6 +45,7 @@ const repos=[
 let offlineSources={};try{offlineSources=JSON.parse(await fs.readFile(path.join(root,'research-snapshots.json'),'utf8'));}catch{}
 for(const repo of repos){if(offlineSources[repo.id]){repo.commit=offlineSources[repo.id].commit;repo.files=Object.keys(offlineSources[repo.id].files);repo.available=true;continue;}try{repo.commit=(await exec('git',['-C',path.join(sourceRoot,repo.id),'rev-parse',repo.ref])).stdout.trim();const existing=[];for(const file of repo.files){try{await exec('git',['-C',path.join(sourceRoot,repo.id),'cat-file','-e',`${repo.commit}:${file}`]);existing.push(file);}catch{}}repo.files=existing;repo.available=true;}catch{repo.available=false;}}
 app.get('/health',route(async()=>({ok:true,service:'rime-studio',pid:process.pid})));
+app.get('/control-panel/metrics',route(async()=>{const memory=process.memoryUsage();return {status:'running',updatedAt:new Date().toISOString(),runtimeMode:'development',processMode:process.env.RIME_STUDIO_MANAGED==='1'?'managed':'observed',pid:process.pid,uptimeSec:process.uptime(),memory:{rssBytes:memory.rss,heapUsedBytes:memory.heapUsed,heapTotalBytes:memory.heapTotal}};}));
 app.get('/api/state',route(async()=>state()));
 app.post('/api/connection',route(async req=>{
  if(switching||store?.busy||deployment.state==='running')throw new Error('配置保存或部署期间不能切换目录');
@@ -83,4 +86,6 @@ app.get('/vendor/diff2html.min.js',(req,res)=>res.sendFile(path.join(root,'node_
 app.get('/vendor/diff2html.min.css',(req,res)=>res.sendFile(path.join(root,'node_modules/diff2html/bundles/css/diff2html.min.css')));
 app.use(express.static(path.join(root,'public')));
 app.use((e,req,res,next)=>res.status(e.status||400).json({error:e.message||'操作失败'}));
-app.listen(port,'127.0.0.1',()=>console.log(`Rime Studio ready: http://127.0.0.1:${port}`));
+const server=app.listen(port,'127.0.0.1',()=>console.log(`Rime Studio ready: http://127.0.0.1:${port}`));
+server.on('error',error=>{console.error(`服务启动失败 (${port}): ${error.message}`);process.exit(1);});
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{server.close(()=>process.exit(0));server.closeIdleConnections();});
