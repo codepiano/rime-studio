@@ -7,7 +7,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {ConfigStore} from './config.js';
 import {previewDictionaryInstall,previewDictionaryAction,dictionaryReferences} from './dictionary-management.js';
-import {LearnedManager} from './learned.js';
+import {LearnedManager,isSingleCharacter} from './learned.js';
 import {inventory,readDictionary,readPhrases,previewPhrases,readPersonalDictionary,previewPersonalDictionary} from './library.js';
 import {catalog,packageState,PackageDownloads} from './packages.js';
 import {articles,components} from './content.js';
@@ -69,7 +69,7 @@ app.post('/api/connection',route(async req=>{
  }finally{switching=false;}
 }));
 function learnedLifecycle(){return {canControl:connection.canDeploy&&connection.confirmed&&process.env.RIME_DISABLE_DEPLOY!=='1'};}
-app.get('/api/learned',route(async req=>({...readableStore().learned.query({dictionary:req.query.dictionary||'',q:req.query.q||'',offset:Number(req.query.offset||0),deleted:req.query.deleted==='true'}),lifecycle:learnedLifecycle()})));
+app.get('/api/learned',route(async req=>({...readableStore().learned.query({dictionary:req.query.dictionary||'',q:req.query.q||'',offset:Number(req.query.offset||0),deleted:req.query.deleted==='true',hideSingle:req.query.hideSingle!=='false'}),lifecycle:learnedLifecycle()})));
 app.post('/api/learned/lifecycle',route(async req=>{
  resourceStore(req);if(!learnedLifecycle().canControl)throw new Error('所选目录不是当前鼠须管原生目录，不能操作系统输入法');
  if(req.body.action==='start'){await exec('/usr/bin/open',['-a',connection.appPath],{timeout:10000});return {message:'已请求启动鼠须管，可从输入法菜单重新选择'};}
@@ -80,7 +80,7 @@ app.post('/api/learned/lifecycle',route(async req=>{
 app.post('/api/learned/refresh',route(async req=>({...await resourceStore(req).learned.refresh(),lifecycle:learnedLifecycle()})));
 app.post('/api/learned/sync',route(async req=>{const active=resourceStore(req);if(!learnedLifecycle().canControl)throw new Error('当前目录不能请求系统鼠须管同步');const binary=connection.binary;return {...await active.learned.syncFromInputMethod(()=>exec(binary,['--sync'],{timeout:10000})),lifecycle:learnedLifecycle()};}));
 app.post('/api/learned/preview',route(async req=>resourceStore(req).learned.preview(req.body)));
-app.get('/api/learned/export',route(async req=>{const manager=readableStore().learned,data=manager.query({dictionary:req.query.dictionary||'',q:req.query.q||''});const rows=[...manager.cache.values()].filter(x=>!req.query.dictionary||x.name===req.query.dictionary).flatMap(x=>x.rows).filter(x=>!x.deleted&&(!req.query.q||x.text.includes(req.query.q)||x.code.includes(req.query.q)));return {filename:'学习词条.tsv',text:'# 文字\t完整编码\t使用次数\t学习词典\n'+rows.map(x=>[x.text,x.code,x.count,x.dictionary].join('\t')).join('\n')+'\n'};}));
+app.get('/api/learned/export',route(async req=>{const manager=readableStore().learned,data=manager.query({dictionary:req.query.dictionary||'',q:req.query.q||'',hideSingle:req.query.hideSingle!=='false'});const rows=[...manager.cache.values()].filter(x=>!req.query.dictionary||x.name===req.query.dictionary).flatMap(x=>x.rows).filter(x=>!x.deleted&&(req.query.hideSingle==='false'||!isSingleCharacter(x.text))&&(!req.query.q||x.text.includes(req.query.q)||x.code.includes(req.query.q)));return {filename:'学习词条.tsv',text:'# 文字\t完整编码\t使用次数\t学习词典\n'+rows.map(x=>[x.text,x.code,x.count,x.dictionary].join('\t')).join('\n')+'\n'};}));
 app.get('/api/library',route(async()=>inventory(readableStore())));
 app.get('/api/library/references',route(async req=>dictionaryReferences(readableStore(),String(req.query.file||'').replace(/\.dict\.yaml$/,''))));
 app.post('/api/library/manage/preview',route(async req=>previewDictionaryAction(resourceStore(req),req.body)));

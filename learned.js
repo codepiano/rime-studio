@@ -8,6 +8,8 @@ import YAML from 'yaml';
 import {digest,readText} from './file-transactions.js';
 const exec=promisify(execFile),fail=message=>{throw new Error(message);};
 const valid=name=>typeof name==='string'&&/^[\p{L}\p{N}_][\p{L}\p{N}_. -]{0,100}$/u.test(name)&&!name.includes('..');
+const characters=new Intl.Segmenter('zh',{granularity:'grapheme'});
+export const isSingleCharacter=text=>[...characters.segment(text)].length===1;
 const rowId=(name,code,text)=>digest(name+'\0'+code+'\0'+text);
 const sourceFile=fileURLToPath(new URL('./native/db-lock.c',import.meta.url));
 export function parseSnapshot(text,name){
@@ -116,10 +118,10 @@ export class LearnedManager{
    return {...this.query(),sync:{state:'unconfirmed',message:'同步请求已发送，但没有观察到快照更新；旧快照不能代表当前学习总量'}};
   }finally{this.busy=false;this.store.busy=false;}
  }
- query({dictionary='',q='',offset=0,deleted=false}={}){
-  if(typeof q!=='string'||q.length>100||!Number.isSafeInteger(offset)||offset<0||typeof deleted!=='boolean'||(dictionary&&!valid(dictionary)))fail('无效学习词条查询');
+ query({dictionary='',q='',offset=0,deleted=false,hideSingle=false}={}){
+  if(typeof q!=='string'||q.length>100||!Number.isSafeInteger(offset)||offset<0||typeof deleted!=='boolean'||typeof hideSingle!=='boolean'||(dictionary&&!valid(dictionary)))fail('无效学习词条查询');
   const dictionaries=[...this.cache.values()].map(data=>({name:data.name,count:data.rows.filter(x=>!x.deleted).length,deletedCount:data.rows.filter(x=>x.deleted).length,hash:data.hash,source:data.source,time:data.time,canDelete:data.canDelete,error:data.error,syncObserved:!!data.syncObserved}));
-  const all=[...this.cache.values()].filter(x=>!dictionary||x.name===dictionary).flatMap(x=>x.rows.map(row=>({...row,canDelete:x.canDelete&&!row.deleted}))).filter(row=>(deleted||!row.deleted)&&(!q||row.text.includes(q)||row.code.includes(q))).sort((a,b)=>b.count-a.count||a.text.localeCompare(b.text));
+  const all=[...this.cache.values()].filter(x=>!dictionary||x.name===dictionary).flatMap(x=>x.rows.map(row=>({...row,canDelete:x.canDelete&&!row.deleted}))).filter(row=>(!hideSingle||!isSingleCharacter(row.text))&&(deleted||!row.deleted)&&(!q||row.text.includes(q)||row.code.includes(q))).sort((a,b)=>b.count-a.count||a.text.localeCompare(b.text));
   const live=dictionaries.filter(x=>x.source==='live').length,snapshots=dictionaries.filter(x=>x.source==='snapshot').length,unavailable=dictionaries.filter(x=>x.source==='unavailable').length;
   return {coverage:{loaded:this.loaded,live,snapshots,unavailable,incomplete:!this.loaded||snapshots>0||unavailable>0},dictionaries,total:all.length,rows:all.slice(offset,offset+100),offset,hasMore:offset+100<all.length};
  }
