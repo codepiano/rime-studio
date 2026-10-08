@@ -117,3 +117,20 @@ macOS `sandbox-exec` 约束普通文件写入为任务目录，保护用户目�
 白霜 README 指定 `others/recipes/full`，而非裸仓库安装。裸 `gaboolic/rime-frost` 或 `@master` 解析到该完整配方；显式指定的分支和其他配方不改写。不再进行笼统的已知仓库文件补齐，plum 输出遵循选定配方。多个安装方式共享最新安装基线，避免切换方式后覆盖本地修改。安装记录自身在界面显示摘要，完整内容仍进入备份。
 
 配置控件仍只支持常见 Rime 配置子集，不能完整解释任意 `__patch`／配方逻辑；高级配方的最终效果以真实编译配置为准。配方准备成功不是编译或输入效果验收。
+
+
+## 学习词典与独立词库管理
+
+`learned.js` 使用检测到的 `rime_dict_manager`，学习数据不混入个人静态词库。`GET /api/learned` 查询缓存；`POST /api/learned/refresh` 刷新所有词典；`POST /api/learned/preview` 预览选择删除或清空单个词典；`GET /api/learned/export` 导出查询结果。学习预览由通用 apply/restore 接口处理，要求连接身份与写令牌。学习词典读取不发起网络请求。
+
+`native/db-lock.c` 以 POSIX fcntl 锁使用 LevelDB 的 LOCK 文件。在同一进程锁下通知 Node 备份，然后 exec 官方导入工具，使原生工具继承锁的进程身份。删除使用官方负提交次数语义，保留其他学习参数。恢复在同一锁下替换数据库文件，保留 LOCK inode；使用完整快照哈希检查删除／恢复前后的所有学习参数。原始数据库备份包含 tombstones、tick 与动态值；禁止仅靠普通文本词频导入冒充完整恢复。
+
+读取先用只读导出取得原用户身份，再在私有工作目录建立受控数据库别名和同步路径，获取官方完整快照；避免改动真实同步目录。数据库目录、LOCK、内部文件及用户身份路径均校验，拒绝符号链接或特殊文件。占用时退回可用同步快照，显示时间且禁止写入；源快照只读。备份上限每个数据库 256 MB／1000 文件，读取快照上限 32 MB。
+
+预览最多选择 1000 条，清空单个词典最多 100000 条。操作共享 ConfigStore 的忙状态；预览与保存再次检查快照哈希。多词典失败尝试只回滚与本次删除相容的变化；不覆盖额外学习。未确认回滚保存 durable pending/uncertain 记录，不自动重复删除，恢复时重新核对。进程恢复和多文件事务不能等同于数据库跨词典原子事务。
+
+原生退出／启动接口 `/api/learned/lifecycle` 只对已确认原生目录开放，`RIME_DISABLE_DEPLOY=1` 禁用。退出通过 Cocoa 的 cooperative terminate，按检测到的可执行程序路径匹配，不使用 killall 或强制停止；启动使用已检测应用路径。副本目录不控制系统输入法。
+
+`dictionary-management.js` 管理 `.rime-studio-dictionaries.json` 和按方案生成的独立扩展入口，复用个人词库入口。导入接口 `/api/library/install/preview` 单独设置 25 MB JSON 解析上限，原接口仍为 150 KB。启停／卸载接口 `/api/library/manage/preview` 校验普通源码词库、依赖、主词库与共享目录边界；`GET /api/library/references` 返回已知引用。删除使用资源事务的 afterExists=false，不仅清空文件内容。
+
+引用集合来自源配置、已部署配置和直接 import_tables，不能完整解释任意 Lua 或高级配置逻辑；失败时保守拒绝删除。停用状态在后续个人词条编辑时保留。安装／删除均绑定来源字节哈希、配置版本和管理记录，源词库变化使预览失效。
