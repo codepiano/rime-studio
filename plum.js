@@ -17,6 +17,7 @@ export function parseRecipes(input){
  }
  return [...new Set(recipes)];
 }
+export function resolveRecipes(input){return [...new Set(parseRecipes(input).map(recipe=>/^gaboolic\/rime-frost(?:@master)?$/.test(recipe)?recipe+':others/recipes/full':recipe))];}
 const quote=value=>JSON.stringify(value);
 const canonical=value=>{try{return realpathSync(value);}catch{return path.resolve(value);}};
 export function sandboxProfile(workDir,extraProtected=[]){
@@ -56,10 +57,10 @@ export async function stageFiles(root,prefix=''){
  }
  return files;
 }
-export async function preparePlum(store,cacheDir,input,{supplement=null}={}){
+export async function preparePlum(store,cacheDir,input){
  if(process.platform!=='darwin')fail('plum 配方执行目前仅支持 macOS');
  const restriction={protectedRoots:[store.userDir]};
- const recipes=parseRecipes(input),revision=(await store.snapshot()).revision;
+ const recipes=resolveRecipes(input),revision=(await store.snapshot()).revision;
  await fs.mkdir(cacheDir,{recursive:true,mode:0o700});const workDir=await fs.realpath(cacheDir);
  const outputDir=path.join(workDir,'output'),engineDir=path.join(workDir,'plum');
  for(const dir of ['output','home','tmp'])await fs.mkdir(path.join(workDir,dir),{mode:0o700});
@@ -74,7 +75,7 @@ export async function preparePlum(store,cacheDir,input,{supplement=null}={}){
  // Pin the installer itself. Fetch and recipe execution share the same confinement.
  await runSandbox(workDir,['/bin/bash','-c',`git init plum && git -C plum remote add origin https://github.com/rime/plum.git && git -C plum fetch --depth 1 origin ${PLUM_COMMIT} && git -C plum checkout --detach FETCH_HEAD`],restriction);
  const result=await runSandbox(workDir,['/usr/bin/env',`rime_dir=${outputDir}`,`plum_dir=${engineDir}`,'/bin/bash',path.join(engineDir,'rime-install'),...recipes],restriction);
- const sources=[],sourceDirs=[];
+ const sources=[];
  const packageRoot=path.join(engineDir,'package');
  const packageStat=await fs.lstat(packageRoot).catch(()=>null);if(packageStat?.isSymbolicLink()||!packageStat?.isDirectory())fail('plum 下载来源目录无效');
  for(const owner of await fs.readdir(packageRoot)){
@@ -83,10 +84,9 @@ export async function preparePlum(store,cacheDir,input,{supplement=null}={}){
   const dir=path.join(packageRoot,owner,repo),stat=await fs.lstat(dir);if(!stat.isDirectory()||stat.isSymbolicLink())fail('plum 来源目录无效');const git=await fs.lstat(path.join(dir,'.git')).catch(()=>null);if(!git?.isDirectory()||git.isSymbolicLink())continue;
   const [{stdout:commit},{stdout:remote}]=await Promise.all([runSandbox(workDir,['git','-C',dir,'rev-parse','HEAD'],restriction),runSandbox(workDir,['git','-C',dir,'config','--get','remote.origin.url'],restriction)]);
   if(!/^[0-9a-f]{40}$/.test(commit.trim())||!/^https:\/\/github.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(remote.trim()))fail('plum 下载来源不符合 GitHub 仓库格式');
-  const repoName=remote.trim().replace(/^https:\/\/github.com\//,'').replace(/\.git$/,'');sources.push({repo:repoName,commit:commit.trim()});sourceDirs.push({repo:repoName,dir});
+  const repoName=remote.trim().replace(/^https:\/\/github.com\//,'').replace(/\.git$/,'');sources.push({repo:repoName,commit:commit.trim()});
   }
  }
- const supplementedFiles=supplement?await supplement({outputDir,sourceDirs,workDir,restriction}):[];
  const files=[],outputFiles=await stageFiles(outputDir);
  for(const file of before.keys())if(!outputFiles.includes(file))fail(`配方删除了 ${file}；暂不自动应用文件删除`);
  for(const file of outputFiles){
@@ -94,6 +94,6 @@ export async function preparePlum(store,cacheDir,input,{supplement=null}={}){
   if(before.get(file)!==digest(resource.text,encoding))files.push(file);
  }
  if(!sources.length)fail('plum 未记录到下载来源');
- return {outputDir,files,revision,seedGuards,provenance:{backend:'plum',recipes,plumCommit:PLUM_COMMIT,sources,supplementedFiles},log:(result.stdout+result.stderr).slice(-12000)};
+ return {outputDir,files,revision,seedGuards,provenance:{backend:'plum',recipes,plumCommit:PLUM_COMMIT,sources},log:(result.stdout+result.stderr).slice(-12000)};
 }
 export function plumIdentity(recipes){return 'plum-'+crypto.createHash('sha256').update(recipes.join('\n')).digest('hex').slice(0,16);}

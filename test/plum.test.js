@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {parseRecipes,runSandbox,stageFiles} from '../plum.js';
+import {parseRecipes,resolveRecipes,runSandbox,stageFiles} from '../plum.js';
 import {packagePreview,packageState} from '../packages.js';
 import {ConfigStore} from '../config.js';
 async function fixture(t){const root=await fs.mkdtemp(path.join(os.tmpdir(),'rime-plum-test-'));const userDir=path.join(root,'user'),sharedDir=path.join(root,'shared'),workDir=path.join(root,'job');for(const dir of [userDir,sharedDir,workDir,path.join(workDir,'home'),path.join(workDir,'tmp'),path.join(workDir,'output')])await fs.mkdir(dir);await fs.writeFile(path.join(sharedDir,'default.yaml'),'schema_list: []\n');await fs.writeFile(path.join(sharedDir,'squirrel.yaml'),'style: {}\n');t.after(()=>fs.rm(root,{recursive:true,force:true}));return {root,workDir,store:new ConfigStore({userDir,sharedDir,dataDir:path.join(root,'backups')})};}
@@ -43,4 +43,8 @@ test('sandbox timeout terminates the recipe process group', {skip:process.platfo
 test('malformed recipe configuration is rejected before writing to the user directory',async t=>{
  const {store:s,workDir}=await fixture(t),output=path.join(workDir,'output');await fs.writeFile(path.join(output,'default.yaml'),'not-a-config\n');
  await assert.rejects(packagePreview(s,{id:'plum-'+'a'.repeat(16),name:'bad',schema:null},output,'a'.repeat(40),{enable:false,preparedFiles:['default.yaml'],provenance:{backend:'plum'}}),/配置映射/);await assert.rejects(fs.stat(path.join(s.userDir,'default.yaml')),/ENOENT/);
+});
+
+test('frost repository shortcuts resolve to its documented full recipe without changing explicit recipes',()=>{
+ assert.deepEqual(resolveRecipes('gaboolic/rime-frost'),['gaboolic/rime-frost:others/recipes/full']);assert.deepEqual(resolveRecipes('gaboolic/rime-frost@master'),['gaboolic/rime-frost@master:others/recipes/full']);assert.deepEqual(resolveRecipes('gaboolic/rime-frost:others/recipes/cn_dicts iDvel/rime-ice'),['gaboolic/rime-frost:others/recipes/cn_dicts','iDvel/rime-ice']);
 });

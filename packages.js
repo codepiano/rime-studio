@@ -4,9 +4,9 @@ import crypto from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import YAML from 'yaml';
-import {readText,readResource,digest,previewFiles,safeFile} from './file-transactions.js';
+import {readText,readResource,digest,previewFiles} from './file-transactions.js';
 import {patchText,dictionaryHeader} from './library.js';
-import {parseRecipes,preparePlum,plumIdentity,PLUM_COMMIT,runSandbox} from './plum.js';
+import {resolveRecipes,preparePlum,plumIdentity,PLUM_COMMIT} from './plum.js';
 const exec=promisify(execFile);
 const manifestFile='.rime-studio-packages.json';
 export const catalog=[
@@ -71,24 +71,12 @@ export async function packagePreview(store,entry,sourceDir,commit,{mode='full',e
  changes.push({file:manifestFile,after:JSON.stringify({version:1,packages:recordedPackages},null,2)+'\n',expected:{hash:digest(manifest.text),exists:manifest.exists}});
  return previewFiles(store,changes,[{title:`${previous?'更新':'安装'}${entry.name}`,value:commit.slice(0,12)}],{type:'package',package:entry.id,commit,mode,conflicts,removedUpstream:removed,schemas:schemaIds,source:entry.url,license:entry.license,...provenance},revision,guards);
 }
-async function supplementKnownPackage(entry,{outputDir,sourceDirs,workDir,restriction}){
- if(!catalog.some(x=>x.id===entry.id))return [];
- const source=sourceDirs.find(x=>x.repo===entry.repo);if(!source)return [];
- const {stdout}=await runSandbox(workDir,['git','-C',source.dir,'ls-files','-z'],restriction),added=[];
- for(const file of stdout.split('\0').filter(Boolean).filter(accepted)){
-  const dest=await safeFile(outputDir,file);if(await fs.lstat(dest).catch(()=>null))continue;
-  const encoding=/\.(gram|db|ocd|ocd2)$/.test(file)?'base64':'utf8';
-  await safeFile(workDir,path.relative(workDir,path.join(source.dir,file)));
-  const resource=await readResource(source.dir,file,encoding);await fs.mkdir(path.dirname(dest),{recursive:true,mode:0o700});await fs.writeFile(dest,encoding==='base64'?Buffer.from(resource.text,'base64'):resource.text,{mode:0o600});added.push(file);
- }
- return added;
-}
 export class PackageDownloads {
  constructor(cacheDir){this.cacheDir=cacheDir;this.jobs=new Map();this.running=false;}
  start(store,body){
   if(this.running)fail('另一个方案正在下载，请稍后再试');
-  const recipes=body.recipe!==undefined?parseRecipes(body.recipe):null;
-  const known=recipes?.length===1?catalog.find(x=>[x.repo,x.repo+'@'+x.branch].includes(recipes[0])):null;
+  const recipes=body.recipe!==undefined?resolveRecipes(body.recipe):null;
+  const known=recipes?.length===1?catalog.find(x=>[x.repo,x.repo+'@'+x.branch,...(x.id==='frost'?[x.repo+':others/recipes/full',x.repo+'@'+x.branch+':others/recipes/full']:[])].includes(recipes[0])):null;
   const entry=recipes?(known||{id:plumIdentity(recipes),name:'plum 配方 · '+recipes.join(' '),repo:recipes.join(' '),url:'https://github.com/rime/plum',license:'以上游来源为准',schema:null}):catalog.find(x=>x.id===body.package);
   if(!entry||!['full','dictionaries'].includes(body.mode)||typeof body.enable!=='boolean')fail('请选择目录中的方案和安装方式');
   const id=crypto.randomUUID(),job={id,state:'downloading',message:`正在下载${entry.name}…`,started:Date.now()};
@@ -103,7 +91,7 @@ export class PackageDownloads {
    await fs.mkdir(this.cacheDir,{recursive:true,mode:0o700});
    if(body.recipe!==undefined){
     job.message='正在通过 plum 准备配方…';
-    const prepared=await preparePlum(store,dir,body.recipe,{supplement:context=>supplementKnownPackage(entry,context)});job.log=prepared.log;
+    const prepared=await preparePlum(store,dir,body.recipe);job.log=prepared.log;
     job.message='plum 已完成准备，正在生成文件预览…';
     job.preview=await packagePreview(store,entry,prepared.outputDir,prepared.provenance.sources[0]?.commit||PLUM_COMMIT,{mode:body.mode,enable:false,preparedFiles:prepared.files,provenance:prepared.provenance,baselineRevision:prepared.revision,seedGuards:prepared.seedGuards});
    }else{
