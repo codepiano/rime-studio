@@ -134,3 +134,5 @@ macOS `sandbox-exec` 约束普通文件写入为任务目录，保护用户目�
 `dictionary-management.js` 管理 `.rime-studio-dictionaries.json` 和按方案生成的独立扩展入口，复用个人词库入口。导入接口 `/api/library/install/preview` 单独设置 25 MB JSON 解析上限，原接口仍为 150 KB。启停／卸载接口 `/api/library/manage/preview` 校验普通源码词库、依赖、主词库与共享目录边界；`GET /api/library/references` 返回已知引用。删除使用资源事务的 afterExists=false，不仅清空文件内容。
 
 引用集合来自源配置、已部署配置和直接 import_tables，不能完整解释任意 Lua 或高级配置逻辑；失败时保守拒绝删除。停用状态在后续个人词条编辑时保留。安装／删除均绑定来源字节哈希、配置版本和管理记录，源词库变化使预览失效。
+
+`POST /api/learned/sync` 只对已确认原生目录开放，沿用连接身份、写令牌和忙状态保护，`RIME_DISABLE_DEPLOY=1` 禁用。调用检测到的 Squirrel `--sync` 通知原生用户资料同步（可能按 Rime 规则合并已有同步资料），轮询快照的哈希和修改时间；连续稳定观察到更新才返回 observed，超时返回 unconfirmed。快照始终只读，不能作为已释放数据库或同步任务完全结束的证据。查询 coverage 区分直接读取、快照、不可用与尚未读取，避免旧快照冒充实时总量。

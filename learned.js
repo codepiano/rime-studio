@@ -51,7 +51,7 @@ async function replaceDatabase(source,dest){
  for(const file of wanted)if(file!=='LOCK'){const temp=path.join(dest,'.studio-'+crypto.randomUUID());await fs.copyFile(path.join(source,file),temp);await fs.chmod(temp,0o600);await fs.rename(temp,path.join(dest,file));}
 }
 export class LearnedManager{
- constructor(store,{tool=null,workDir=path.join(store.dataDir,'learned-cache')}={}){this.store=store;this.tool=tool;this.workDir=workDir;this.cache=new Map();this.busy=false;store.learned=this;}
+ constructor(store,{tool=null,workDir=path.join(store.dataDir,'learned-cache')}={}){this.store=store;this.tool=tool;this.workDir=workDir;this.cache=new Map();this.loaded=false;this.busy=false;store.learned=this;}
  async helper(){
   if(!this.tool)fail('没有检测到鼠须管词典管理工具');
   const source=await fs.readFile(sourceFile),dir=path.join(this.workDir,'native',digest(source).slice(0,16)),binary=path.join(dir,'db-lock');
@@ -95,14 +95,33 @@ export class LearnedManager{
  async refresh(){
   if(this.busy||this.store.busy)fail('词典正在操作，请稍后重试');this.busy=true;this.store.busy=true;
   try{const snapshots=await this.snapshotCandidates(),names=new Set(snapshots.keys());for(const entry of await fs.readdir(this.store.userDir,{withFileTypes:true}))if(entry.isDirectory()&&!entry.isSymbolicLink()&&entry.name.endsWith('.userdb')&&valid(entry.name.slice(0,-7)))names.add(entry.name.slice(0,-7));
-   const nextCache=new Map();for(const name of names){let data,error='';try{data=await this.dump(name);}catch(e){error=e.message;data=snapshots.get(name)||{rows:[],hash:null,source:'unavailable',time:null,canDelete:false};}nextCache.set(name,{name,...data,error});}this.cache=nextCache;return this.query();
+   const nextCache=new Map();for(const name of names){let data,error='';try{data=await this.dump(name);}catch(e){error=e.message;data=snapshots.get(name)||{rows:[],hash:null,source:'unavailable',time:null,canDelete:false};}nextCache.set(name,{name,...data,error});}this.cache=nextCache;this.loaded=true;return this.query();
+  }finally{this.busy=false;this.store.busy=false;}
+ }
+ async syncFromInputMethod(requestSync,{timeout=15000,interval=250}={}){
+  if(this.busy||this.store.busy)fail('词典正在操作，请稍后重试');this.busy=true;this.store.busy=true;
+  try{
+   const before=await this.snapshotCandidates(),started=Date.now();await requestSync();let previous='',stable=0;
+   while(Date.now()-started<timeout){
+    await new Promise(resolve=>setTimeout(resolve,interval));const current=await this.snapshotCandidates();
+    const updated=[...current].filter(([name,data])=>{const old=before.get(name);return !old||old.hash!==data.hash||old.time!==data.time;});
+    const fingerprint=digest(JSON.stringify([...current].map(([name,data])=>[name,data.hash,data.time]).sort()));
+    stable=fingerprint===previous?stable+1:0;previous=fingerprint;
+    if(updated.length&&stable>=2){
+     const nextCache=new Map();for(const [name,data]of current)nextCache.set(name,{name,...data,syncObserved:updated.some(([id])=>id===name),error:data.preferred?'':'这是未确认属于当前用户实例的同步快照'});
+     for(const entry of await fs.readdir(this.store.userDir,{withFileTypes:true}))if(entry.isDirectory()&&!entry.isSymbolicLink()&&entry.name.endsWith('.userdb')){const name=entry.name.slice(0,-7);if(valid(name)&&!nextCache.has(name))nextCache.set(name,{name,rows:[],hash:null,source:'unavailable',canDelete:false,error:'没有观察到这份词典的同步快照'});}
+     this.cache=nextCache;this.loaded=true;return {...this.query(),sync:{state:'observed',message:'已观察到同步快照更新；运行中的新输入可能继续增加记录，快照只用于查阅'}};
+    }
+   }
+   return {...this.query(),sync:{state:'unconfirmed',message:'同步请求已发送，但没有观察到快照更新；旧快照不能代表当前学习总量'}};
   }finally{this.busy=false;this.store.busy=false;}
  }
  query({dictionary='',q='',offset=0,deleted=false}={}){
   if(typeof q!=='string'||q.length>100||!Number.isSafeInteger(offset)||offset<0||typeof deleted!=='boolean'||(dictionary&&!valid(dictionary)))fail('无效学习词条查询');
-  const dictionaries=[...this.cache.values()].map(data=>({name:data.name,count:data.rows.filter(x=>!x.deleted).length,deletedCount:data.rows.filter(x=>x.deleted).length,hash:data.hash,source:data.source,time:data.time,canDelete:data.canDelete,error:data.error}));
+  const dictionaries=[...this.cache.values()].map(data=>({name:data.name,count:data.rows.filter(x=>!x.deleted).length,deletedCount:data.rows.filter(x=>x.deleted).length,hash:data.hash,source:data.source,time:data.time,canDelete:data.canDelete,error:data.error,syncObserved:!!data.syncObserved}));
   const all=[...this.cache.values()].filter(x=>!dictionary||x.name===dictionary).flatMap(x=>x.rows.map(row=>({...row,canDelete:x.canDelete&&!row.deleted}))).filter(row=>(deleted||!row.deleted)&&(!q||row.text.includes(q)||row.code.includes(q))).sort((a,b)=>b.count-a.count||a.text.localeCompare(b.text));
-  return {dictionaries,total:all.length,rows:all.slice(offset,offset+100),offset,hasMore:offset+100<all.length};
+  const live=dictionaries.filter(x=>x.source==='live').length,snapshots=dictionaries.filter(x=>x.source==='snapshot').length,unavailable=dictionaries.filter(x=>x.source==='unavailable').length;
+  return {coverage:{loaded:this.loaded,live,snapshots,unavailable,incomplete:!this.loaded||snapshots>0||unavailable>0},dictionaries,total:all.length,rows:all.slice(offset,offset+100),offset,hasMore:offset+100<all.length};
  }
  async preview(body){
   if(this.busy||this.store.busy)fail('词典正在操作');this.busy=true;this.store.busy=true;try{

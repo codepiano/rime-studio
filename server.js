@@ -78,6 +78,7 @@ app.post('/api/learned/lifecycle',route(async req=>{
  const {stdout}=await exec('/usr/bin/osascript',['-l','JavaScript','-e',script],{timeout:10000});const result=JSON.parse(stdout);return {message:result.requested?'已请求退出鼠须管。请切换到系统输入法，退出完成后读取最新记录':'鼠须管未在运行，可读取最新记录'};
 }));
 app.post('/api/learned/refresh',route(async req=>({...await resourceStore(req).learned.refresh(),lifecycle:learnedLifecycle()})));
+app.post('/api/learned/sync',route(async req=>{const active=resourceStore(req);if(!learnedLifecycle().canControl)throw new Error('当前目录不能请求系统鼠须管同步');const binary=connection.binary;return {...await active.learned.syncFromInputMethod(()=>exec(binary,['--sync'],{timeout:10000})),lifecycle:learnedLifecycle()};}));
 app.post('/api/learned/preview',route(async req=>resourceStore(req).learned.preview(req.body)));
 app.get('/api/learned/export',route(async req=>{const manager=readableStore().learned,data=manager.query({dictionary:req.query.dictionary||'',q:req.query.q||''});const rows=[...manager.cache.values()].filter(x=>!req.query.dictionary||x.name===req.query.dictionary).flatMap(x=>x.rows).filter(x=>!x.deleted&&(!req.query.q||x.text.includes(req.query.q)||x.code.includes(req.query.q)));return {filename:'学习词条.tsv',text:'# 文字\t完整编码\t使用次数\t学习词典\n'+rows.map(x=>[x.text,x.code,x.count,x.dictionary].join('\t')).join('\n')+'\n'};}));
 app.get('/api/library',route(async()=>inventory(readableStore())));
