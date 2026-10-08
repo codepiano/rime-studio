@@ -6,6 +6,8 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {ConfigStore} from './config.js';
+import {inventory,readDictionary,readPhrases,previewPhrases,readPersonalDictionary,previewPersonalDictionary} from './library.js';
+import {catalog,packageState,PackageDownloads} from './packages.js';
 import {articles,components} from './content.js';
 import {withFileDiff} from './review-diff.js';
 import {discoverConnection,loadPreferences,savePreferences,backupDirectory,resolveDirectory} from './connection.js';
@@ -18,6 +20,10 @@ let preferenceError='',preferences={};try{preferences=await loadPreferences(pref
 let connection=await discoverConnection({preferences});if(preferenceError)connection.issues.push(`已保存的连接设置无法读取：${preferenceError}`);
 let store=connection.ready?new ConfigStore({userDir:connection.userDir,sharedDir:connection.sharedDir,dataDir:backupDirectory(root,connection,dataDir)}):null;
 let switching=false;
+const downloads=new WeakMap();
+function downloader(active){if(!downloads.has(active))downloads.set(active,new PackageDownloads(path.join(dataDir,'packages',crypto.createHash('sha256').update(active.userDir).digest('hex').slice(0,24))));return downloads.get(active);}
+function resourceStore(req){const active=connected(req);if(deployment.state==='running'||active.busy||downloader(active).running)throw new Error('保存、部署或方案下载期间请稍后再试');return active;}
+function readableStore(){if(switching||!connection.ready||!store)throw new Error('请先连接配置目录');return store;}
 const emptySnapshot={revision:null,defaults:{},squirrel:{},schemas:[],files:{},enabled:[],deployedEnabled:[],themes:[],history:[]};
 function connected(req){if(switching)throw new Error('正在切换配置目录，请稍后重试');if(!connection.ready||!store)throw new Error('请先在连接设置中指定有效的配置目录');if(!connection.confirmed)throw new Error('请先在连接设置中确认实际正在使用的配置目录');if(req.body.connectionId!==connection.id)throw new Error('配置目录已变化，请刷新页面后重新操作');return store;}
 async function state(){const current=connection,active=store;let snapshot=emptySnapshot,status={...current};if(current.ready&&active){try{snapshot=await active.snapshot();}catch(e){status={...current,ready:false,issues:[...current.issues,`配置读取失败：${e.message}`]};}}return {...snapshot,token,version:current.version,connection:status,deployment,articles,components,repos:repos.map(x=>({...x}))};}
@@ -45,7 +51,7 @@ for(const repo of repos){if(offlineSources[repo.id]){repo.commit=offlineSources[
 app.get('/health',route(async()=>({ok:true,service:'rime-studio',pid:process.pid})));
 app.get('/api/state',route(async()=>state()));
 app.post('/api/connection',route(async req=>{
- if(switching||store?.busy||deployment.state==='running')throw new Error('配置保存或部署期间不能切换目录');
+ if(switching||store?.busy||deployment.state==='running'||(store&&downloader(store).running))throw new Error('配置保存或部署期间不能切换目录');
  switching=true;try{
   const next=req.body.reset?{}:{userDir:resolveDirectory(req.body.userDir),sharedDir:resolveDirectory(req.body.sharedDir),confirmed:true};
   const candidate=await discoverConnection({preferences:next});
@@ -57,13 +63,22 @@ app.post('/api/connection',route(async req=>{
   return await state();
  }finally{switching=false;}
 }));
+app.get('/api/library',route(async()=>inventory(readableStore())));
+app.get('/api/library/dictionary',route(async req=>readDictionary(readableStore(),req.query.file,req.query.q||'',Number(req.query.offset||0))));
+app.get('/api/library/phrases',route(async req=>readPhrases(readableStore(),req.query.schema)));
+app.get('/api/library/personal',route(async req=>readPersonalDictionary(readableStore(),req.query.schema)));
+app.post('/api/library/phrases/preview',route(async req=>previewPhrases(resourceStore(req),req.body)));
+app.post('/api/library/personal/preview',route(async req=>previewPersonalDictionary(resourceStore(req),req.body)));
+app.get('/api/packages',route(async()=>({catalog,installed:store?await packageState(readableStore()):{}})));
+app.post('/api/packages/download',route(async req=>{const active=resourceStore(req);return downloader(active).start(active,req.body);}));
+app.get('/api/packages/download/:id',route(async req=>downloader(readableStore()).get(req.params.id)));
 app.post('/api/preview',route(async req=>withFileDiff(await connected(req).preview(req.body.changes,req.body.revision))));
-app.post('/api/apply',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再保存');return connected(req).apply(req.body.id);}));
-app.post('/api/restore',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再恢复');return connected(req).restore(req.body.id);}));
+app.post('/api/apply',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再保存');return resourceStore(req).apply(req.body.id);}));
+app.post('/api/restore',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再恢复');return resourceStore(req).restore(req.body.id);}));
 app.get('/api/source',route(async req=>{const repo=repos.find(r=>r.id===req.query.repo);if(!repo?.available||!repo.files.includes(req.query.file))throw new Error('源码文件不在浏览清单内');let stdout=offlineSources[repo.id]?.files[req.query.file];if(stdout===undefined)({stdout}=await exec('git',['-C',path.join(sourceRoot,repo.id),'show',`${repo.commit}:${req.query.file}`],{maxBuffer:2*1024*1024}));return {text:stdout,commit:repo.commit,url:repo.id==='rime-wiki'?`${repo.url}/${String(req.query.file).replace('.md','')}`:`${repo.url}/blob/${repo.commit}/${req.query.file}`};}));
 app.get('/api/deployment',route(async()=>deployment));
 app.post('/api/deploy',route(async req=>{
- if(process.env.RIME_DISABLE_DEPLOY==='1')throw new Error('测试环境禁用了真实部署');connected(req);if(!connection.canDeploy)throw new Error('所选目录不是当前鼠须管的原生配置目录，不能请求系统重载；保存仍只作用于所选目录');if(store.busy)throw new Error('配置正在保存');if(deployment.state==='running')throw new Error('正在部署，请等待');
+ if(process.env.RIME_DISABLE_DEPLOY==='1')throw new Error('测试环境禁用了真实部署');connected(req);if(!connection.canDeploy)throw new Error('所选目录不是当前鼠须管的原生配置目录，不能请求系统重载；保存仍只作用于所选目录');if(store.busy||downloader(store).running)throw new Error('配置正在保存或下载');if(deployment.state==='running')throw new Error('正在部署，请等待');
  const userDir=connection.userDir,binary=connection.binary;const active=store;
  const snap=await active.snapshot();const targets=['default','squirrel',...snap.enabled.map(id=>`${id}.schema`)];const expected={};for(const name of targets){const custom=name.replace(/\.schema$/,'')+'.custom.yaml';const st=await fs.stat(path.join(userDir,custom)).catch(()=>null);if(st)expected[name]={mtime:Math.floor(st.mtimeMs/1000)};}
  const began=Date.now();const prior={};for(const name of targets){prior[name]=(await active.readFile(path.join(userDir,'build',name+'.yaml'))).text;}

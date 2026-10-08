@@ -42,3 +42,12 @@ test('large dictionary previews return hashes and size without sending the corpu
  assert.equal(p.files[0].summaryOnly,true);assert.equal(p.files[0].after,undefined);assert.equal(p.files[0].afterHash.length,64);
  const r=await s.apply(p.id);assert.ok(r.id);assert.equal((await readText(s.userDir,'big.dict.yaml')).text.length,'知键\tzhi jian\t10\n'.repeat(6000).length);
 });
+test('binary models preview actual byte hashes and restore exact data',async t=>{
+ const s=await setup(t),original=Buffer.from([0,255,17,0,3]),updated=Buffer.from([255,0,100,25,254]);await fs.writeFile(path.join(s.userDir,'language.gram'),original);
+ const p=await previewFiles(s,[{file:'language.gram',encoding:'base64',after:updated.toString('base64')}],[]);assert.equal(p.files[0].binary,true);assert.equal(p.files[0].beforeBytes,5);assert.equal(p.files[0].after,undefined);
+ const r=await s.apply(p.id);assert.deepEqual(await fs.readFile(path.join(s.userDir,'language.gram')),updated);await s.restore(r.id);assert.deepEqual(await fs.readFile(path.join(s.userDir,'language.gram')),original);
+});
+test('text resources retain a UTF-8 BOM in the exact backup and restore',async t=>{
+ const s=await setup(t),before='\uFEFF# 原文件\n旧词\told\t100\n';await fs.writeFile(path.join(s.userDir,'phrases.txt'),before);
+ const p=await previewFiles(s,[{file:'phrases.txt',after:'新词\tnew\t100\n'}],[]);const r=await s.apply(p.id);await s.restore(r.id);assert.equal(await fs.readFile(path.join(s.userDir,'phrases.txt'),'utf8'),before);
+});

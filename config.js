@@ -46,7 +46,7 @@ export class ConfigStore {
   for(const f of names){const id=f.replace('.schema.yaml',''); const cfg=await this.effective(`${id}.schema`);const built=await this.readFile(path.join(this.userDir,'build',f));schemas.push({id,name:cfg.schema?.name||id,description:cfg.schema?.description||'',config:cfg,deployed:!!built.text,deployedConfig:built.data});}
   const defaults=await this.effective('default'),squirrel=await this.effective('squirrel');
   const files={}; for(const f of ['default.custom.yaml','squirrel.custom.yaml',...names.map(f=>f.replace('.schema.yaml','.custom.yaml'))])files[f]=(await this.readFile(path.join(this.userDir,f))).text;
-  const deps=[...new Set([...userFiles,...sharedFiles].filter(f=>/^[a-z0-9_.-]+\.yaml$/.test(f)&&!f.endsWith('.dict.yaml')))];const basis={};for(const f of deps){basis['user/'+f]=(await this.readFile(path.join(this.userDir,f))).text;basis['shared/'+f]=(await this.readFile(path.join(this.sharedDir,f))).text;}
+  const deps=[...new Set([...userFiles,...sharedFiles].filter(f=>/^[a-z0-9_.-]+\.yaml$/.test(f)&&!f.endsWith('.dict.yaml')&&!['user.yaml','installation.yaml'].includes(f)))];const basis={};for(const f of deps){basis['user/'+f]=(await this.readFile(path.join(this.userDir,f))).text;basis['shared/'+f]=(await this.readFile(path.join(this.sharedDir,f))).text;}
   const deployedDefault=(await this.readFile(path.join(this.userDir,'build','default.yaml'))).data;
   return {revision:hash(JSON.stringify({files,basis})),defaults,squirrel,schemas,files,userDir:this.userDir,enabled:(defaults.schema_list||[]).map(s=>s.schema),deployedEnabled:(deployedDefault.schema_list||[]).map(s=>s.schema),themes:Object.entries(squirrel.preset_color_schemes||{}).map(([id,x])=>({id,name:x.name||id,...x})),history:await this.history()};
  }

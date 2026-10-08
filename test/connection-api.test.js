@@ -33,3 +33,20 @@ test('setup, invalid path rejection, persistence, and directory switching are is
 test('missing directories still bootstrap the settings page and reject configuration writes',async t=>{
  const app=await launch(t,{RIME_USER_DIR:'/nonexistent/rime-studio-user',RIME_SHARED_DIR:'/nonexistent/rime-studio-shared'});const response=await app.request('/api/state');assert.equal(response.status,200);assert.equal(response.data.connection.ready,false);assert.deepEqual(response.data.schemas,[]);assert.ok(response.data.connection.issues.length);assert.ok(response.data.token);const write=await app.request('/api/preview',{changes:[{field:'page_size',value:6}]},response.data.token);assert.equal(write.status,400);assert.match(write.data.error,/连接设置/);
 });
+test('library APIs bind resource writes to connection identity and enforce input/token limits',async t=>{
+ const app=await launch(t),initial=(await app.request('/api/state')).data,one=await dirs(app.dir,'library-one');
+ await fs.writeFile(path.join(one.userDir,'test.schema.yaml'),'schema: {schema_id: test, name: 测试}\nengine: {translators: [script_translator]}\ntranslator: {dictionary: base}\n');
+ await fs.writeFile(path.join(one.sharedDir,'base.dict.yaml'),'---\nname: base\n...\n基础\tji chu\t100\n');
+ const state=(await app.request('/api/connection',one,initial.token)).data;
+ const listing=await app.request('/api/library');assert.equal(listing.status,200);assert.equal(listing.data.schemas[0].dictionary,'base');
+ const phrases=(await app.request('/api/library/phrases?schema=test')).data;
+ const payload={...phrases,text:'知键\tzj\t100\n',connectionId:state.connection.id};
+ assert.equal((await app.request('/api/library/phrases/preview',payload,'wrong')).status,403);
+ const preview=await app.request('/api/library/phrases/preview',payload,state.token);assert.equal(preview.status,200);
+ const write=await app.request('/api/apply',{id:preview.data.id,connectionId:state.connection.id},state.token);assert.equal(write.status,200);
+ assert.match(await fs.readFile(path.join(one.userDir,'studio_test_phrases.txt'),'utf8'),/知键/);
+ const unsafe=await app.request('/api/library/dictionary?file=..%2Foutside.dict.yaml');assert.equal(unsafe.status,400);
+ const arbitrary=await app.request('/api/packages/download',{package:'https://example.com/arbitrary',mode:'full',enable:true,connectionId:state.connection.id},state.token);assert.equal(arbitrary.status,400);
+ const two=await dirs(app.dir,'library-two');await app.request('/api/connection',two,state.token);
+ assert.equal((await app.request('/api/library/phrases/preview',payload,state.token)).status,400);
+});

@@ -123,3 +123,23 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .connection-check small{display:block;color:var(--muted);font-size:10px;margin-top:7px;overflow-wrap:anywhere;line-height:1.7}
 .connection-issues{padding-left:18px;color:#8e7658;font-size:12px;line-height:1.9;margin-bottom:20px}
 .connection-help{padding:13px 15px;background:#f2f5eb;border:1px solid #dfe6d6;border-radius:7px;font-size:12px;color:#718360;margin-bottom:22px;line-height:1.9}
+.library-package-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.library-meta{font-size:11px;line-height:1.9;color:var(--muted);margin:12px 0;overflow-wrap:anywhere}
+.library-actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.library-picker{display:flex;align-items:center;gap:14px;margin:20px 0;font-size:13px}
+.library-picker select{min-width:200px;max-width:100%}
+.library-relations{padding:20px;background:#edf2e4;border:1px solid var(--line);border-radius:8px;margin-bottom:22px}
+.library-relations strong{font-size:13px}.library-relations p{font-size:12px;line-height:1.8;color:var(--muted);margin:9px 0}
+.library-dict-layout{display:grid;grid-template-columns:minmax(230px,.8fr) minmax(0,1.5fr);gap:22px}
+.library-dict-list{max-height:650px;overflow:auto}
+.library-dict-item{display:block;width:100%;text-align:left;padding:12px;border-radius:6px;border:1px solid transparent;margin:3px 0}
+.library-dict-item.selected,.library-dict-item:hover{background:#edf2e4;border-color:#d4dfc8}
+.library-dict-item strong{display:block;font-size:12px}.library-dict-item small{display:block;font-size:10px;line-height:1.9;color:var(--muted);overflow-wrap:anywhere}
+.library-table-wrap{overflow:auto}.library-table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}
+.library-table td,.library-table th{padding:11px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.library-table th{font-weight:500;color:var(--muted)}.library-editor .library-table{min-width:560px}
+.library-editor td input{width:100%;min-width:60px}.library-editor td:first-child{width:40%}.library-editor td:nth-child(2){width:28%}.library-editor td:nth-child(3){width:16%}
+.library-import{position:relative;overflow:hidden;cursor:pointer}.library-import input{position:absolute;opacity:0;inset:0;width:100%;cursor:pointer}
+.library-large-diff{padding:22px;background:#f2f5eb;font-size:12px;line-height:1.9;overflow-wrap:anywhere}.library-large-diff p{margin-top:10px}
+@media(max-width:900px){.library-package-grid,.library-dict-layout{grid-template-columns:1fr}.library-dict-list{max-height:320px}}
+@media(max-width:650px){.library-picker{flex-wrap:wrap}.library-package-grid{gap:14px}.library-actions .primary{width:100%}}
