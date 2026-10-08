@@ -9,6 +9,10 @@ server.js                 本机 HTTP 服务、请求检查、源码读取、部
 connection.js             系统与用户目录发现、连接设置持久化
 config.js                 配置读取、补丁修改、预览、备份及恢复
 review-diff.js            从预览的原始字节生成文件差异
+file-transactions.js       受限路径的文本／二进制资源预览、备份与恢复
+library.js                词库头部、依赖关系、词条查询与个人文本编辑
+packages.js               精选仓库下载、文件筛选、来源记录与更新保护
+public/library-view.js    方案与词库界面
 content.js                按使用目的整理的操作卡与组件说明
 public/app.js             页面、导航、控件与操作卡
 public/forget-demo.js     误选词移除教学练习
@@ -82,3 +86,18 @@ PORT=4320 npm start
 针对具体问题提交 issue 或 PR，注明运行环境、鼠须管版本、重现方法和预期行为。配置示例使用最小匿名片段，不提交真实词库、备份、安装标识、个人短语或访问令牌。
 
 提交前运行适当测试与 `git diff --check`。界面修改还应核对桌面、小屏、键盘操作和可见状态。保持“待应用、已保存、部署请求、已观察到编译更新、实际输入效果”各自清晰。
+
+
+## 方案与词库接口
+
+新增只读接口：`GET /api/library`、`/api/library/dictionary?file=&q=&offset=`、`/api/library/phrases?schema=`、`/api/library/personal?schema=`、`/api/packages`、`/api/packages/download/:id`。
+
+新增写请求：`POST /api/library/phrases/preview`、`/api/library/personal/preview`、`/api/packages/download`。同样要求来源检查、写令牌和 `connectionId`；通用 `/api/apply`、`/api/restore` 接收服务端预览和备份 ID。没有任意文件写入、任意远程仓库或 Shell 接口。
+
+下载只允许代码目录中的雾凇和白霜，通过 Git 下载到 `.data/packages/` 下的独立缓存，取得准确提交后筛选数据文件。不执行上游 recipe 脚本。完整原仓库及许可证留在缓存中，用户目录写入 `.rime-studio-packages.json` 记录来源和已安装哈希。更新时若文件偏离上次安装哈希，保留原文件，并保持旧文件基线以便下次仍能识别冲突。
+
+资源事务只允许普通文件和真实父目录，拒绝路径穿越、符号链接及特殊文件。文本使用 UTF-8，模型和 OpenCC／Lua 数据使用二进制字节；总修改量上限 120 MB。存在性独立于空文本记录。基础词库依赖和未改动方案文件也绑定预览哈希，保存前再核对。Rime 会话状态 `user.yaml` 与安装标识 `installation.yaml` 不参与设置版本指纹。
+
+较大文本（两侧合计超过 64 KB 或 2000 行）及二进制文件只发送摘要；完整数据留在服务端预览和备份中。资源事务与原设置保存共享 `ConfigStore.busy`，下载期间阻止切换目录和保存／恢复／部署。多文件写入失败会尽力回滚，仍不等于文件系统事务；原始备份保留供排查。
+
+Rime 词库的 `import_tables` 不能依赖多层聚合入口自动递归展开。个人扩展显式展开引用链，保留基础入口的编译设置和用户学习词典名称；不改变上游词库。真实隔离编译和候选验证记录见 `验收记录.md`。
