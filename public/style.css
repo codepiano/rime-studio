@@ -146,3 +146,8 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .library-plum-form>label{font-size:13px;font-weight:500}
 .library-plum-form .inlineform{display:flex;flex-wrap:wrap;gap:10px}.library-plum-form input{flex:1;min-width:210px}
 @media(max-width:650px){.library-plum-form .primary{width:100%}.library-plum-form input{min-width:0;width:100%;flex-basis:100%}}
+.learned-databases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.learned-db{padding:13px;border:1px solid var(--line);border-radius:7px;background:#f5f7f0;overflow-wrap:anywhere}
+.learned-db strong,.learned-db span,.learned-db small{display:block;line-height:1.8}.learned-db strong{font-size:12px}.learned-db span{font-size:11px;color:var(--green)}.learned-db small{font-size:10px;color:var(--muted)}
+.learned-table{min-width:650px}.learned-table td:first-child{width:48px}
+@media(max-width:800px){.learned-databases{grid-template-columns:1fr}}

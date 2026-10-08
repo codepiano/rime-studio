@@ -6,6 +6,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {ConfigStore} from './config.js';
+import {LearnedManager} from './learned.js';
 import {inventory,readDictionary,readPhrases,previewPhrases,readPersonalDictionary,previewPersonalDictionary} from './library.js';
 import {catalog,packageState,PackageDownloads} from './packages.js';
 import {articles,components} from './content.js';
@@ -19,6 +20,8 @@ const preferencesFile=path.join(dataDir,'settings.json');
 let preferenceError='',preferences={};try{preferences=await loadPreferences(preferencesFile);}catch(e){preferenceError=e.message;}
 let connection=await discoverConnection({preferences});if(preferenceError)connection.issues.push(`已保存的连接设置无法读取：${preferenceError}`);
 let store=connection.ready?new ConfigStore({userDir:connection.userDir,sharedDir:connection.sharedDir,dataDir:backupDirectory(root,connection,dataDir)}):null;
+attachLearned(store,connection);
+function attachLearned(active,c){if(active)new LearnedManager(active,{tool:c.binary?path.join(path.dirname(c.binary),'rime_dict_manager'):null});}
 let switching=false;
 const downloads=new WeakMap();
 function downloader(active){if(!downloads.has(active))downloads.set(active,new PackageDownloads(path.join(dataDir,'packages',crypto.createHash('sha256').update(active.userDir).digest('hex').slice(0,24))));return downloads.get(active);}
@@ -57,12 +60,24 @@ app.post('/api/connection',route(async req=>{
   const candidate=await discoverConnection({preferences:next});
   if(!req.body.reset&&!candidate.ready)throw new Error(candidate.issues.join(' '));
   const active=candidate.ready?new ConfigStore({userDir:candidate.userDir,sharedDir:candidate.sharedDir,dataDir:backupDirectory(root,candidate,dataDir)}):null;
-  if(active)await active.snapshot();
+  if(active){await active.snapshot();attachLearned(active,candidate);}
   await savePreferences(preferencesFile,next);preferences=next;connection=candidate;store=active;
   deployment={state:'idle',message:'尚未发起部署'};
   return await state();
  }finally{switching=false;}
 }));
+function learnedLifecycle(){return {canControl:connection.canDeploy&&connection.confirmed&&process.env.RIME_DISABLE_DEPLOY!=='1'};}
+app.get('/api/learned',route(async req=>({...readableStore().learned.query({dictionary:req.query.dictionary||'',q:req.query.q||'',offset:Number(req.query.offset||0),deleted:req.query.deleted==='true'}),lifecycle:learnedLifecycle()})));
+app.post('/api/learned/lifecycle',route(async req=>{
+ resourceStore(req);if(!learnedLifecycle().canControl)throw new Error('所选目录不是当前鼠须管原生目录，不能操作系统输入法');
+ if(req.body.action==='start'){await exec('/usr/bin/open',['-a',connection.appPath],{timeout:10000});return {message:'已请求启动鼠须管，可从输入法菜单重新选择'};}
+ if(req.body.action!=='pause')throw new Error('无效输入法操作');
+ const script=`ObjC.import('AppKit'); const apps=$.NSWorkspace.sharedWorkspace.runningApplications;let count=0;for(let i=0;i<apps.count;i++){const app=apps.objectAtIndex(i),url=app.executableURL;if(url&&ObjC.unwrap(url.path)===${JSON.stringify(connection.binary)}){if(!app.terminate)throw new Error('应用未接受退出请求');count++;}}JSON.stringify({requested:count});`;
+ const {stdout}=await exec('/usr/bin/osascript',['-l','JavaScript','-e',script],{timeout:10000});const result=JSON.parse(stdout);return {message:result.requested?'已请求退出鼠须管。请切换到系统输入法，退出完成后读取最新记录':'鼠须管未在运行，可读取最新记录'};
+}));
+app.post('/api/learned/refresh',route(async req=>({...await resourceStore(req).learned.refresh(),lifecycle:learnedLifecycle()})));
+app.post('/api/learned/preview',route(async req=>resourceStore(req).learned.preview(req.body)));
+app.get('/api/learned/export',route(async req=>{const manager=readableStore().learned,data=manager.query({dictionary:req.query.dictionary||'',q:req.query.q||''});const rows=[...manager.cache.values()].filter(x=>!req.query.dictionary||x.name===req.query.dictionary).flatMap(x=>x.rows).filter(x=>!x.deleted&&(!req.query.q||x.text.includes(req.query.q)||x.code.includes(req.query.q)));return {filename:'学习词条.tsv',text:'# 文字\t完整编码\t使用次数\t学习词典\n'+rows.map(x=>[x.text,x.code,x.count,x.dictionary].join('\t')).join('\n')+'\n'};}));
 app.get('/api/library',route(async()=>inventory(readableStore())));
 app.get('/api/library/dictionary',route(async req=>readDictionary(readableStore(),req.query.file,req.query.q||'',Number(req.query.offset||0))));
 app.get('/api/library/phrases',route(async req=>readPhrases(readableStore(),req.query.schema)));
