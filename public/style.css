@@ -143,3 +143,6 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .library-large-diff{padding:22px;background:#f2f5eb;font-size:12px;line-height:1.9;overflow-wrap:anywhere}.library-large-diff p{margin-top:10px}
 @media(max-width:900px){.library-package-grid,.library-dict-layout{grid-template-columns:1fr}.library-dict-list{max-height:320px}}
 @media(max-width:650px){.library-picker{flex-wrap:wrap}.library-package-grid{gap:14px}.library-actions .primary{width:100%}}
+.library-plum-form>label{font-size:13px;font-weight:500}
+.library-plum-form .inlineform{display:flex;flex-wrap:wrap;gap:10px}.library-plum-form input{flex:1;min-width:210px}
+@media(max-width:650px){.library-plum-form .primary{width:100%}.library-plum-form input{min-width:0;width:100%;flex-basis:100%}}
