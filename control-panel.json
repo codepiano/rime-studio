@@ -1,0 +1,26 @@
+{
+  "name": "知键 · Rime Studio",
+  "workingDirectory": ".",
+  "ports": [
+    4312
+  ],
+  "id": "rime-studio",
+  "surfaceType": "web",
+  "runtimeMode": "development",
+  "processMode": "managed",
+  "processManager": "project-script",
+  "pidFile": ".runtime/server.pid",
+  "frontendUrl": "http://127.0.0.1:4312",
+  "metricsUrl": "http://127.0.0.1:4312/control-panel/metrics",
+  "notes": "本机 Rime 配置工作台；入口会启动服务并打开浏览器。",
+  "scripts": {
+    "init": "scripts/init.sh",
+    "install": "scripts/install.sh",
+    "start": "scripts/start.sh",
+    "stop": "scripts/stop.sh",
+    "status": "scripts/status.sh",
+    "restart": "scripts/restart.sh",
+    "uninstall": "scripts/uninstall.sh",
+    "openEntry": "scripts/open-entry.sh"
+  }
+}
