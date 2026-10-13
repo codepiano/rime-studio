@@ -23,6 +23,7 @@ Rime 文档的作者、示例作者及贡献者署名仍保留在原始内容中
 | yaml | <https://github.com/eemeli/yaml> |
 | diff / jsdiff | <https://github.com/kpdecker/jsdiff> |
 | diff2html | <https://github.com/rtfpessoa/diff2html> |
+| opencc-js 1.4.2 | <https://github.com/nk2028/opencc-js>，代码 MIT，所含 OpenCC 字典数据 Apache-2.0；保留包内 LICENSE、LICENSES 和 THIRD_PARTY_LICENSES.md |
 
 具体版本由 `package-lock.json` 固定。各直接与间接依赖的许可证以对应包内文本为准，依赖目录不提交到本仓库。
 

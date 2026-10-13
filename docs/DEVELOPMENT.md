@@ -13,6 +13,11 @@ file-transactions.js       受限路径的文本／二进制资源预览、备�
 library.js                词库头部、依赖关系、词条查询与个人文本编辑
 packages.js               精选仓库下载、文件筛选、来源记录与更新保护
 public/library-view.js    方案与词库界面
+public/phrase-format.js   前后端共享的短语解析、重码检查与原格式保留
+public/tools-view.js      系统词典和 OpenCC 工具箱界面
+system-dictionary.js      本机词典辅助程序构建、输入验证与查询
+native/system-dictionary.c macOS Dictionary Services 纯文本查询
+text-tools.js             固定模式、长度上限与 OpenCC 转换
 plum.js                   固定安装器、配方校验、受限执行与暂存输出
 content.js                按使用目的整理的操作卡与组件说明
 public/app.js             页面、导航、控件与操作卡
@@ -58,6 +63,9 @@ npm start
 | POST | `/api/deploy` | 请求鼠须管重载并观察编译产物 |
 | GET | `/api/deployment` | 部署检查状态 |
 | GET | `/api/source` | 读取白名单内的固定提交源码文件 |
+| GET | `/api/tools` | 系统词典平台支持、转换模式与输入上限 |
+| POST | `/api/dictionary/query` | `{term}` 查询本机系统词典 |
+| POST | `/api/tools/convert` | `{text, mode}` 离线繁简及地域用词转换 |
 
 写请求要求 `x-rime-token`。配置修改请求还要求当前连接的 `connectionId`，跨目录或缺少身份的请求被拒绝。自动检测到的候选必须确认后才能写入；启动环境变量属于显式指定。服务检查本机 Host 与 Origin，不允许任意外部来源。令牌随进程生成，不写入仓库。不应绕过这些边界把服务作为公网管理接口。
 
@@ -137,3 +145,15 @@ macOS `sandbox-exec` 约束普通文件写入为任务目录，保护用户目�
 引用集合来自源配置、已部署配置和直接 import_tables，不能完整解释任意 Lua 或高级配置逻辑；失败时保守拒绝删除。停用状态在后续个人词条编辑时保留。安装／删除均绑定来源字节哈希、配置版本和管理记录，源词库变化使预览失效。
 
 `POST /api/learned/sync` 只对已确认原生目录开放，沿用连接身份、写令牌和忙状态保护，`RIME_DISABLE_DEPLOY=1` 禁用。调用检测到的 Squirrel `--sync` 通知原生用户资料同步（可能按 Rime 规则合并已有同步资料），轮询快照的哈希和修改时间；连续稳定观察到更新才返回 observed，超时返回 unconfirmed。快照始终只读，不能作为已释放数据库或同步任务完全结束的证据。查询 coverage 区分直接读取、快照、不可用与尚未读取，避免旧快照冒充实时总量。
+
+## 短语管理和文字工具
+
+`GET /api/library/phrases?schema=&file=` 只接受所选方案已引用的固定文本表；未接入时目标文件由方案 ID 派生。读取与接入使用保存的源配置，支持 `tabledb` 和 `stabledb`，优先选择名字中包含 phrase 的翻译器。首次接入创建 `studio_phrases`，使用 stabledb、禁止造句／补全和 initial_quality=99；不改动主词库或学习数据库。
+
+短语读取返回文件存在性、内容哈希、配置 revision、表选择与共用方案。预览核对这些状态；用户文件缺失时还绑定共享文件的存在性与哈希，避免上游改变后被旧预览静默遮盖。使用原资源事务应用、备份和恢复。前后端共享 `public/phrase-format.js`，按原行身份编辑，保留 BOM、注释、空行、LF／CRLF、可选第三列与末尾换行状态；新条目沿用原文件换行方式。同码候选允许，重复文本和编码拒绝。
+
+浏览器短语草稿只保存在模块内存，按连接、方案和文件隔离；刷新浏览器不保证保留。读取时文件或配置变化，会显示新内容并提供旧草稿导出。导入使用 UTF-8 fatal 解码；空编辑行忽略，后端重新执行格式、重复、条数、字节数和路径校验。
+
+文字工具两个 POST 接口同样要求 Host、Origin 和写令牌，独立于 Rime 连接，不写配置／词库。系统词典最多 120 个 UTF-16 单位、单行字词，通过 execFile 的独立参数调用固定本机程序，无 Shell。`native/system-dictionary.c` 调用公开 Dictionary Services API，使用 CFString 长度作为 UTF-16 范围，返回首个匹配记录的纯文本；退出码 3 表示未找到。首次查询以 clang 构建，按源码 SHA-256 和 CPU 架构缓存到工作台数据目录，失败可重试；不打包系统词典数据。查询有 10 秒超时和 1 MB 输出上限。
+
+OpenCC 使用固定 `opencc-js 1.4.2` 及包内字典，8 种白名单模式、30,000 个 UTF-16 单位上限，转换器按模式复用。文本不持久化、不记入日志、不调用外部网络。前端查询／转换使用请求序号，防止页面切换后的旧请求覆盖新结果；修改原文或模式立即使结果失效。系统词典缺少工具或词条和转换结果无需变化分别显示明确状态。

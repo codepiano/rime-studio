@@ -151,3 +151,14 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .learned-db strong,.learned-db span,.learned-db small{display:block;line-height:1.8}.learned-db strong{font-size:12px}.learned-db span{font-size:11px;color:var(--green)}.learned-db small{font-size:10px;color:var(--muted)}
 .learned-table{min-width:650px}.learned-table td:first-child{width:48px}
 @media(max-width:800px){.learned-databases{grid-template-columns:1fr}}
+.tool-query label,.tool-mode,.text-tool-columns>label{font-size:13px;font-weight:500}
+.tool-query input{width:min(100%,480px);flex:1;min-width:0}.tool-query .inlineform{display:flex;gap:10px}
+.tool-mode{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.tool-mode select{max-width:100%}
+.text-tool-columns{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.text-tool-columns textarea{display:block;width:100%;resize:vertical;min-height:220px;margin-top:10px;padding:14px;border:1px solid var(--line);border-radius:7px;background:#fcfdf9;color:var(--ink);line-height:1.8;white-space:pre-wrap}
+.text-tool-columns textarea:focus{outline:2px solid #a8b798;outline-offset:2px}.text-tool-columns textarea[readonly]{background:#f1f4ea}
+.text-tool-columns .library-meta{display:block;font-weight:400}.dictionary-definition{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9;padding:20px;background:#f3f6ec;border:1px solid #dfe6d6;border-radius:8px}
+.tool-result h3{margin-bottom:8px}.tool-result:empty{display:none}.phrase-search-label{display:flex;align-items:center;gap:12px;margin:16px 0;font-size:12px}
+.phrase-search-label input{flex:1;min-width:0}.phrase-feedback{font-size:12px;line-height:1.8;overflow-wrap:anywhere}.phrase-feedback.has-issues{margin-top:14px;padding:12px;background:#f8f1e6;border:1px solid #e8dec9;border-radius:6px;color:#997751}
+@media(max-width:800px){.text-tool-columns{grid-template-columns:1fr}.text-tool-columns textarea{min-height:160px}}
+@media(max-width:650px){.tool-query .inlineform{flex-wrap:wrap}.tool-query input{flex-basis:100%}.tool-query .btn{width:100%}.tool-mode{align-items:flex-start}.tool-mode select{width:100%}.phrase-search-label{flex-wrap:wrap}.phrase-search-label input{flex-basis:100%}.sidebar{overflow-y:auto}}

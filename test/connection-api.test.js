@@ -46,6 +46,16 @@ test('setup, invalid path rejection, persistence, and directory switching are is
 test('missing directories still bootstrap the settings page and reject configuration writes',async t=>{
  const app=await launch(t,{RIME_USER_DIR:'/nonexistent/rime-studio-user',RIME_SHARED_DIR:'/nonexistent/rime-studio-shared'});const response=await app.request('/api/state');assert.equal(response.status,200);assert.equal(response.data.connection.ready,false);assert.deepEqual(response.data.schemas,[]);assert.ok(response.data.connection.issues.length);assert.ok(response.data.token);const write=await app.request('/api/preview',{changes:[{field:'page_size',value:6}]},response.data.token);assert.equal(write.status,400);assert.match(write.data.error,/连接设置/);
 });
+
+test('text tools work without a Rime connection and retain local-origin and token protection',async t=>{
+ const app=await launch(t,{RIME_USER_DIR:'/nonexistent/rime-tools-user',RIME_SHARED_DIR:'/nonexistent/rime-tools-shared'}),state=(await app.request('/api/state')).data;
+ const tools=(await app.request('/api/tools')).data;assert.equal(tools.conversionModes.length,8);assert.equal(tools.textLimit,30000);
+ const denied=await app.request('/api/tools/convert',{text:'汉语',mode:'s2t'});assert.equal(denied.status,403);
+ const conversion=await app.request('/api/tools/convert',{text:'鼠标和软件',mode:'s2twp'},state.token);assert.equal(conversion.status,200);assert.equal(conversion.data.text,'滑鼠和軟體');
+ const invalid=await app.request('/api/dictionary/query',{term:'bad\nquery'},state.token);assert.equal(invalid.status,400);
+ const external=await fetch(app.base+'/api/tools/convert',{method:'POST',headers:{'Content-Type':'application/json','x-rime-token':state.token,Origin:'https://example.com'},body:JSON.stringify({text:'汉语',mode:'s2t'})});assert.equal(external.status,403);
+ await assert.rejects(fs.stat(path.join(app.dir,'data/native')),/ENOENT/);
+});
 test('library APIs bind resource writes to connection identity and enforce input/token limits',async t=>{
  const app=await launch(t),initial=(await app.request('/api/state')).data,one=await dirs(app.dir,'library-one');
  await fs.writeFile(path.join(one.userDir,'test.schema.yaml'),'schema: {schema_id: test, name: 测试}\nengine: {translators: [script_translator]}\ntranslator: {dictionary: base}\n');

@@ -12,6 +12,8 @@ import {inventory,readDictionary,readPhrases,previewPhrases,readPersonalDictiona
 import {catalog,packageState,PackageDownloads} from './packages.js';
 import {articles,components} from './content.js';
 import {withFileDiff} from './review-diff.js';
+import {SystemDictionary} from './system-dictionary.js';
+import {conversionModes,convertText} from './text-tools.js';
 import {discoverConnection,loadPreferences,savePreferences,backupDirectory,resolveDirectory} from './connection.js';
 const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url));
 const manifest=JSON.parse(await fs.readFile(path.join(root,'control-panel.json'),'utf8'));
@@ -19,6 +21,7 @@ const port=Number(process.env.PORT||manifest.ports[0]);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT 必须是 1 到 65535 的整数');
 const sourceRoot=process.env.RIME_SOURCE_DIR||path.resolve(root,'../../work');
 const dataDir=process.env.RIME_STUDIO_DATA_DIR||path.join(root,'.data');
+const systemDictionary=new SystemDictionary(dataDir);
 const preferencesFile=path.join(dataDir,'settings.json');
 let preferenceError='',preferences={};try{preferences=await loadPreferences(preferencesFile);}catch(e){preferenceError=e.message;}
 let connection=await discoverConnection({preferences});if(preferenceError)connection.issues.push(`已保存的连接设置无法读取：${preferenceError}`);
@@ -58,6 +61,9 @@ for(const repo of repos){if(offlineSources[repo.id]){repo.commit=offlineSources[
 app.get('/health',route(async()=>({ok:true,service:'rime-studio',pid:process.pid})));
 app.get('/control-panel/metrics',route(async()=>{const memory=process.memoryUsage();return {status:'running',updatedAt:new Date().toISOString(),runtimeMode:'development',processMode:process.env.RIME_STUDIO_MANAGED==='1'?'managed':'observed',pid:process.pid,uptimeSec:process.uptime(),memory:{rssBytes:memory.rss,heapUsedBytes:memory.heapUsed,heapTotalBytes:memory.heapTotal}};}));
 app.get('/api/state',route(async()=>state()));
+app.get('/api/tools',route(async()=>({dictionary:{supported:process.platform==='darwin',source:'macOS 系统词典'},conversionModes:conversionModes.map(({id,name})=>({id,name})),textLimit:30000})));
+app.post('/api/dictionary/query',route(async req=>systemDictionary.lookup(req.body.term)));
+app.post('/api/tools/convert',route(async req=>convertText(req.body)));
 app.post('/api/connection',route(async req=>{
  if(switching||store?.busy||deployment.state==='running'||(store&&downloader(store).running))throw new Error('配置保存或部署期间不能切换目录');
  switching=true;try{
@@ -89,7 +95,7 @@ app.get('/api/library/references',route(async req=>dictionaryReferences(readable
 app.post('/api/library/manage/preview',route(async req=>previewDictionaryAction(resourceStore(req),req.body)));
 app.post('/api/library/install/preview',route(async req=>previewDictionaryInstall(resourceStore(req),req.body)));
 app.get('/api/library/dictionary',route(async req=>readDictionary(readableStore(),req.query.file,req.query.q||'',Number(req.query.offset||0))));
-app.get('/api/library/phrases',route(async req=>readPhrases(readableStore(),req.query.schema)));
+app.get('/api/library/phrases',route(async req=>readPhrases(readableStore(),req.query.schema,req.query.file)));
 app.get('/api/library/personal',route(async req=>readPersonalDictionary(readableStore(),req.query.schema)));
 app.post('/api/library/phrases/preview',route(async req=>previewPhrases(resourceStore(req),req.body)));
 app.post('/api/library/personal/preview',route(async req=>previewPersonalDictionary(resourceStore(req),req.body)));

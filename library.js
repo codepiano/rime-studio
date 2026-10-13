@@ -3,6 +3,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import {digest,readText,safeFile,previewFiles} from './file-transactions.js';
 import {managedContext,managedChanges,activeTables,managementState} from './dictionary-management.js';
+import {phraseRows,phraseProblems} from './public/phrase-format.js';
 const fail = message => { throw new Error(message); };
 const identifier = /^[a-z][a-z0-9_]*$/;
 const tableName = /^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/;
@@ -32,13 +33,13 @@ export function parseRows(text, columns=['text','code','weight']) {
   }
   return rows;
 }
-function configFor(schema) { return schema.deployed ? schema.deployedConfig : schema.config; }
+function configFor(schema) { return schema.config; }
 export function phraseFiles(schema) {
   const config = configFor(schema), result=[];
   for (const item of config.engine?.translators || []) {
     if (typeof item !== 'string' || !item.startsWith('table_translator@')) continue;
     const key=item.slice('table_translator@'.length), table=config[key];
-    if (table?.db_class === 'tabledb' && editableName(table.user_dict || '')) result.push({key, file:table.user_dict.endsWith('.txt')?table.user_dict:table.user_dict+'.txt'});
+    if (['tabledb','stabledb'].includes(table?.db_class) && !table.dictionary && editableName(table.user_dict || '')) result.push({key, file:table.user_dict.endsWith('.txt')?table.user_dict:table.user_dict+'.txt'});
   }
   return result;
 }
@@ -85,15 +86,16 @@ export async function readDictionary(store,file,query='',offset=0) {
   return {file,origin,name:data.name,columns,imports,total,matched,rows,offset,hasMore:matched>offset+100,hash:digest(source.text)};
 }
 async function selected(store,id) {const snapshot=await store.snapshot(),schema=snapshot.schemas.find(x=>x.id===id);if(!schema)fail('请选择已安装方案');return {snapshot,schema};}
-export async function readPhrases(store,id) {
-  const {schema}=await selected(store,id), choices=phraseFiles(schema);
-  if(choices.length>1)fail('方案引用了多个短语表，暂不支持合并编辑');
-  const file=choices[0]?.file||`studio_${id}_phrases.txt`;
+export async function readPhrases(store,id,requestedFile) {
+  const {snapshot,schema}=await selected(store,id), choices=phraseFiles(schema);
+  const preferred=choices.find(x=>/phrase/.test(x.key))||choices[0];
+  const file=requestedFile||preferred?.file||`studio_${id}_phrases.txt`;
+  if(requestedFile&&!choices.some(x=>x.file===file)&&!(choices.length===0&&file===`studio_${id}_phrases.txt`))fail('请选择当前方案引用的短语表');
   const source=await readText(store.userDir,file);
   let shared=false;
   if(!source.exists){const inherited=await readText(store.sharedDir,file);if(inherited.exists){source.text=inherited.text;shared=true;}}
   if(Buffer.byteLength(source.text)>100000)fail('短语表超过 100 KB，请使用外部编辑器');
-  return {schema:id,file,text:source.text,rows:parseRows(source.text),hash:digest(source.text),exists:source.exists,shared,attached:!!choices.length};
+  return {schema:id,file,text:source.text,rows:phraseRows(source.text),hash:digest(source.text),exists:source.exists,shared,attached:!!choices.length,choices,revision:snapshot.revision,usedBy:snapshot.schemas.filter(x=>phraseFiles(x).some(p=>p.file===file)).map(x=>({id:x.id,name:x.name}))};
 }
 export function patchText(text, values) {
   const doc=YAML.parseDocument(text||'patch: {}\n');
@@ -117,19 +119,25 @@ function validateRows(text) {
   return rows;
 }
 export async function previewPhrases(store, body) {
-  validateRows(body.text);
+  if(typeof body.text!=='string'||Buffer.byteLength(body.text)>100000||body.text.includes('\0'))fail('请输入不超过 100 KB 的短语');
+  const rows=phraseRows(body.text),problems=phraseProblems(rows);
+  if(rows.length>2000)fail('最多支持 2000 条短语');
+  if(problems.errors.length)fail(problems.errors[0]);
   const revision=(await store.snapshot()).revision;
-  const current=await readPhrases(store,body.schema);
+  if(body.revision&&body.revision!==revision)fail('方案配置已变化，请重新读取短语表');
+  const current=await readPhrases(store,body.schema,body.file);
   if(current.hash!==body.hash||current.exists!==body.exists)fail('短语表已变化，请重新读取');
   const changes=[{file:current.file,after:body.text,expected:{hash:current.exists?current.hash:digest(''),exists:current.exists}}];
   if(!current.attached){
     const {schema}=await selected(store,body.schema),cfg=configFor(schema),custom=`${body.schema}.custom.yaml`,source=await readText(store.userDir,custom);
     const translators=cfg.engine?.translators;
     if(!Array.isArray(translators)||translators.some(x=>typeof x!=='string'))fail('无法识别方案翻译器，请先部署方案');
-    if(cfg.studio_phrases)fail('方案已占用 studio_phrases 名称');
-    changes.push({file:custom,after:patchText(source.text,{'engine/translators':[...translators,'table_translator@studio_phrases'],studio_phrases:{dictionary:'',user_dict:current.file.replace(/\.txt$/,''),db_class:'tabledb',enable_completion:false,enable_sentence:false,initial_quality:1}}),expected:{hash:digest(source.text),exists:source.exists}});
+    if(cfg.studio_phrases||translators.includes('table_translator@studio_phrases'))fail('方案已占用 studio_phrases 名称，请先核对现有短语配置');
+    if(!rows.length)fail('请先添加一条短语再启用');
+    changes.push({file:custom,after:patchText(source.text,{'engine/translators':[...translators,'table_translator@studio_phrases'],studio_phrases:{dictionary:'',user_dict:current.file.replace(/\.txt$/,''),db_class:'stabledb',enable_completion:false,enable_sentence:false,initial_quality:99}}),expected:{hash:digest(source.text),exists:source.exists}});
   }
-  return previewFiles(store,changes,[{title:'快捷短语',schema:body.schema,file:current.file}],{type:'phrases'},revision);
+  const guards=!current.exists?[{file:current.file,origin:'shared',exists:current.shared,hash:current.shared?current.hash:digest('')}]:[];
+  return previewFiles(store,changes,[{title:'快捷短语',schema:body.schema,file:current.file}],{type:'phrases',duplicateCodes:problems.conflicts},revision,guards);
 }
 export async function previewPersonalDictionary(store,body) {
  if(!identifier.test(body.schema||''))badSchema();const rows=validateRows(body.text),context=await managedContext(store,body.schema),name=context.personal,file=name+'.dict.yaml',current=await readText(store.userDir,file);

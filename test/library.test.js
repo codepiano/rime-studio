@@ -27,14 +27,14 @@ test('existing phrase table supports preview, backup, external edits and restore
  await fs.appendFile(path.join(s.userDir,'custom_phrase.txt'),'外部\tout\t1\n');await assert.rejects(previewPhrases(s,{...source,text:'知键\tzj\t1\n'}),/已变化/);
 });
 test('new phrase table wires translator without losing existing settings',async t=>{
- const s=await setup(t),source=await readPhrases(s,'test');await fs.writeFile(path.join(s.userDir,'test.custom.yaml'),'# 保留\npatch:\n  menu/page_size: 6\n');
+ const s=await setup(t);await fs.writeFile(path.join(s.userDir,'test.custom.yaml'),'# 保留\npatch:\n  menu/page_size: 6\n');const source=await readPhrases(s,'test');
  const p=await previewPhrases(s,{...source,text:'知键\tzj\t100\n'});await s.apply(p.id);
  const cfg=(await s.snapshot()).schemas[0].config;assert.deepEqual(cfg.engine.translators,['script_translator','table_translator@studio_phrases']);assert.equal(cfg.studio_phrases.user_dict,'studio_test_phrases');assert.equal(cfg.menu.page_size,6);assert.equal((await readPhrases(s,'test')).attached,true);
 });
 test('invalid rows and advanced overlays are rejected before writing',async t=>{
  const s=await setup(t),source=await readPhrases(s,'test');
  for(const text of ['无编码','字\tz\t-1','字\tz\t1\t多列','字\tz\t1\n字\tz\t2'])await assert.rejects(previewPhrases(s,{...source,text}));
- await fs.writeFile(path.join(s.userDir,'test.custom.yaml'),'patch:\n  engine/translators/+: [table_translator]\n');await assert.rejects(previewPhrases(s,{...source,text:'字\tz\t1\n'}),/高级补丁/);
+ await fs.writeFile(path.join(s.userDir,'test.custom.yaml'),'patch:\n  engine/translators/+: [table_translator]\n');await assert.rejects(previewPhrases(s,{...await readPhrases(s,'test'),text:'字\tz\t1\n'}),/高级补丁/);
 });
 test('personal dictionary wraps upstream while preserving learned dictionary identity',async t=>{
  const s=await setup(t),source=await readPersonalDictionary(s,'test'),p=await previewPersonalDictionary(s,{...source,text:'知键\tzhi jian\t100\n'}),result=await s.apply(p.id);
@@ -54,4 +54,35 @@ test('personal extension expands aggregate dictionary imports and preserves comp
 test('personal dictionary preview expires if an imported base table changes',async t=>{
  const s=await setup(t),source=await readPersonalDictionary(s,'test'),p=await previewPersonalDictionary(s,{...source,text:'字\tzi\t100\n'});
  await fs.appendFile(path.join(s.sharedDir,'base.dict.yaml'),'外部词\twai bu ci\t1\n');await assert.rejects(s.apply(p.id),/依赖.*已变化/);await assert.rejects(fs.stat(path.join(s.userDir,'studio_test_personal.dict.yaml')),/ENOENT/);
+});
+
+test('stable phrase tables use saved configuration instead of stale deployment and never attach twice',async t=>{
+ const s=await setup(t);await fs.writeFile(path.join(s.userDir,'test.custom.yaml'),YAML.stringify({patch:{'engine/translators':['script_translator','table_translator@custom_phrase'],custom_phrase:{dictionary:'',user_dict:'shortcuts',db_class:'stabledb'}}}));
+ await fs.mkdir(path.join(s.userDir,'build'));await fs.copyFile(path.join(s.userDir,'test.schema.yaml'),path.join(s.userDir,'build/test.schema.yaml'));
+ const before='\uFEFF# 保留\r\n邮箱\tyx\r\n';await fs.writeFile(path.join(s.userDir,'shortcuts.txt'),before);
+ const source=await readPhrases(s,'test');assert.equal(source.attached,true);assert.equal(source.file,'shortcuts.txt');
+ const p=await previewPhrases(s,{...source,text:before+'地址\tdz\t20\r\n'});assert.deepEqual(p.files.map(x=>x.file),['shortcuts.txt']);const saved=await s.apply(p.id);await s.restore(saved.id);assert.equal(await fs.readFile(path.join(s.userDir,'shortcuts.txt'),'utf8'),before);
+});
+test('shared phrase table changes expire a preview and user copies can be restored to absence',async t=>{
+ const s=await setup(t,{phrase:true});await fs.writeFile(path.join(s.sharedDir,'custom_phrase.txt'),'# 内置\n签名\tqm\n');
+ let source=await readPhrases(s,'test');assert.equal(source.shared,true);const p=await previewPhrases(s,{...source,text:'签名\tqm\n地址\tdz\n'});
+ await fs.appendFile(path.join(s.sharedDir,'custom_phrase.txt'),'外部\twb\n');await assert.rejects(s.apply(p.id),/依赖.*变化/);assert.equal((await readPhrases(s,'test')).exists,false);
+ source=await readPhrases(s,'test');const saved=await s.apply((await previewPhrases(s,{...source,text:source.text+'邮箱\tyx\n'})).id);assert.equal((await readPhrases(s,'test')).shared,false);await s.restore(saved.id);assert.equal((await readPhrases(s,'test')).shared,true);
+});
+test('multiple fixed tables can be selected without accepting arbitrary files and expose sharing',async t=>{
+ const s=await setup(t,{phrase:true}),config=YAML.parse(await fs.readFile(path.join(s.userDir,'test.schema.yaml'),'utf8'));config.engine.translators.push('table_translator@other');config.other={dictionary:'',user_dict:'other_phrases',db_class:'stabledb'};await fs.writeFile(path.join(s.userDir,'test.schema.yaml'),YAML.stringify(config));
+ await fs.writeFile(path.join(s.userDir,'other.schema.yaml'),YAML.stringify({...config,schema:{schema_id:'other',name:'其他'}}));
+ const source=await readPhrases(s,'test','other_phrases.txt');assert.equal(source.choices.length,2);assert.equal(source.usedBy.length,2);
+ const p=await previewPhrases(s,{...source,text:'邮箱\tyx\t10\n邮编\tyx\t20\n'});assert.equal(p.metadata.duplicateCodes.length,1);assert.deepEqual(p.files.map(x=>x.file),['other_phrases.txt']);
+ await assert.rejects(readPhrases(s,'test','outside.txt'),/当前方案/);
+ await assert.rejects(readPhrases(s,'test','../other_phrases.txt'),/当前方案/);
+});
+test('phrase editor refuses configuration changes since reading and blank initial activation',async t=>{
+ const s=await setup(t),source=await readPhrases(s,'test');await assert.rejects(previewPhrases(s,{...source,text:''}),/添加一条/);
+ await fs.writeFile(path.join(s.userDir,'test.custom.yaml'),'patch:\n  menu/page_size: 7\n');await assert.rejects(previewPhrases(s,{...source,text:'邮箱\tyx\n'}),/方案配置已变化/);
+});
+
+test('a shared phrase file appearing after preview cannot be shadowed silently',async t=>{
+ const s=await setup(t,{phrase:true}),source=await readPhrases(s,'test'),p=await previewPhrases(s,{...source,text:'邮箱\tyx\n'});
+ await fs.writeFile(path.join(s.sharedDir,'custom_phrase.txt'),'后来提供的短语\txx\n');await assert.rejects(s.apply(p.id),/依赖.*变化/);await assert.rejects(fs.stat(path.join(s.userDir,'custom_phrase.txt')),/ENOENT/);
 });
