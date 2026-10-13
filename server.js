@@ -9,7 +9,10 @@ import {ConfigStore} from './config.js';
 import {previewDictionaryInstall,previewDictionaryAction,dictionaryReferences} from './dictionary-management.js';
 import {LearnedManager,isSingleCharacter} from './learned.js';
 import {inventory,readDictionary,readPhrases,previewPhrases,readPersonalDictionary,previewPersonalDictionary} from './library.js';
-import {catalog,packageState,PackageDownloads} from './packages.js';
+import {queryHistory,historyDetail} from './backup-history.js';
+import {exportMigration,MigrationManager} from './migration.js';
+import {conflictDetail} from './package-conflicts.js';
+import {catalog,packageState,PackageDownloads,resolvePackagePreview} from './packages.js';
 import {articles,components} from './content.js';
 import {withFileDiff} from './review-diff.js';
 import {searchResources} from './search.js';
@@ -32,12 +35,13 @@ let store=connection.ready?new ConfigStore({userDir:connection.userDir,sharedDir
 attachLearned(store,connection);
 function attachLearned(active,c){if(active)new LearnedManager(active,{tool:c.binary?path.join(path.dirname(c.binary),'rime_dict_manager'):null});}
 let switching=false,mutating=false;
-const downloads=new WeakMap();
-function downloader(active){if(!downloads.has(active))downloads.set(active,new PackageDownloads(path.join(dataDir,'packages',crypto.createHash('sha256').update(active.userDir).digest('hex').slice(0,24))));return downloads.get(active);}
+const downloads=new WeakMap(),allDownloaders=new Set(),migrations=new WeakMap();
+function migration(active){if(!migrations.has(active))migrations.set(active,new MigrationManager(active));return migrations.get(active);}
+function downloader(active){if(!downloads.has(active)){const manager=new PackageDownloads(path.join(dataDir,'packages',crypto.createHash('sha256').update(active.userDir).digest('hex').slice(0,24)));downloads.set(active,manager);allDownloaders.add(manager);}return downloads.get(active);}
 function resourceStore(req){const active=connected(req);if(mutating||deployment.state==='running'||active.busy||downloader(active).running)throw new Error('保存、部署或方案下载期间请稍后再试');return active;}
 function readableStore(){if(switching||!connection.ready||!store)throw new Error('请先连接配置目录');return store;}
 const emptySnapshot={revision:null,defaults:{},squirrel:{},schemas:[],files:{},enabled:[],deployedEnabled:[],themes:[],history:[]};
-function connected(req){if(switching)throw new Error('正在切换配置目录，请稍后重试');if(!connection.ready||!store)throw new Error('请先在连接设置中指定有效的配置目录');if(!connection.confirmed)throw new Error('请先在连接设置中确认实际正在使用的配置目录');if(req.body.connectionId!==connection.id)throw new Error('配置目录已变化，请刷新页面后重新操作');return store;}
+function connected(req){if(stopping)throw new Error('服务正在停止，请稍后重试');if(switching)throw new Error('正在切换配置目录，请稍后重试');if(!connection.ready||!store)throw new Error('请先在连接设置中指定有效的配置目录');if(!connection.confirmed)throw new Error('请先在连接设置中确认实际正在使用的配置目录');if(req.body.connectionId!==connection.id)throw new Error('配置目录已变化，请刷新页面后重新操作');return store;}
 async function state(){const current=connection,active=store;let snapshot=emptySnapshot,status={...current};if(current.ready&&active){try{snapshot=await active.snapshot();}catch(e){status={...current,ready:false,issues:[...current.issues,`配置读取失败：${e.message}`]};}}let pending=[],pendingError='';if(current.ready&&active)try{pending=await pendingChanges(active);}catch(error){pendingError=error.message;}return {...snapshot,pendingDeploymentError:pendingError,pendingDeployment:pending.map(x=>x.file),token,version:current.version,connection:status,deployment,articles,components,repos:repos.map(x=>({...x}))};}
 const app=express(),token=crypto.randomBytes(32).toString('hex');
 const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`];
@@ -50,6 +54,8 @@ app.use((req,res,next)=>{
  if(req.method!=='GET'&&req.headers['x-rime-token']!==token)return res.status(403).json({error:'请从本地界面操作'});next();
 });
 app.use('/api/library/install/preview',express.json({limit:'25mb'}));
+app.use('/api/migration/inspect',express.json({limit:'32mb'}));
+app.use('/api/packages/resolve/preview',express.json({limit:'8mb'}));
 app.use(express.json({limit:'150kb'}));
 const route=fn=>async(req,res,next)=>{try{res.json(await fn(req,res));}catch(e){next(e);}};
 let deployment={state:'idle',message:'尚未发起部署'};
@@ -105,10 +111,22 @@ app.get('/api/library/personal',route(async req=>readPersonalDictionary(readable
 app.post('/api/library/phrases/preview',route(async req=>previewPhrases(resourceStore(req),req.body)));
 app.post('/api/library/personal/preview',route(async req=>previewPersonalDictionary(resourceStore(req),req.body)));
 app.get('/api/packages',route(async()=>({catalog,installed:store?await packageState(readableStore()):{}})));
+function boundRead(req){const active=readableStore();if(req.query.connectionId!==connection.id)throw new Error('配置目录已变化，请刷新后重试');return active;}
+app.get('/api/packages/tasks',route(async req=>{const active=boundRead(req);return {...await downloader(active).list(),connectionId:req.query.connectionId};}));
 app.post('/api/packages/download',route(async req=>{const active=resourceStore(req);return downloader(active).start(active,req.body);}));
 app.get('/api/packages/download/:id',route(async req=>downloader(readableStore()).get(req.params.id)));
+app.post('/api/packages/download/:id/cancel',route(async req=>downloader(connected(req)).cancel(req.params.id)));
+app.post('/api/packages/download/:id/retry',route(async req=>downloader(resourceStore(req)).retry(store,req.params.id)));
+app.post('/api/packages/download/:id/preview',route(async req=>{const active=resourceStore(req);return downloader(active).preview(active,req.params.id);}));
+app.get('/api/packages/conflict',route(async req=>conflictDetail(boundRead(req),req.query.preview,req.query.file)));
+app.post('/api/packages/resolve/preview',route(async req=>{const active=resourceStore(req),next=await resolvePackagePreview(active,req.body);downloader(active).replacePreview(req.body.id,next);return next;}));
+app.get('/api/history',route(async req=>queryHistory(boundRead(req),{q:req.query.q||'',kind:req.query.kind||'',status:req.query.status||'',offset:Number(req.query.offset||0),limit:Number(req.query.limit||20)})));
+app.get('/api/history/:id',route(async req=>historyDetail(boundRead(req),req.params.id)));
+app.post('/api/migration/export',route(async req=>exportMigration(resourceStore(req))));
+app.post('/api/migration/inspect',route(async req=>migration(resourceStore(req)).inspect(req.body.text)));
+app.post('/api/migration/preview',route(async req=>migration(resourceStore(req)).preview(req.body)));
 app.post('/api/preview',route(async req=>withFileDiff(await connected(req).preview(req.body.changes,req.body.revision))));
-app.post('/api/apply',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再保存');const active=resourceStore(req);mutating=true;try{const result=await active.apply(req.body.id);if(result.requiresDeploy!==false){try{await recordDeploymentChanges(active,result.files);}catch(error){result.message+='；待部署记录写入失败：'+error.message;}deployment={state:'idle',message:'尚未发起部署'};}return result;}finally{mutating=false;}}));
+app.post('/api/apply',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再保存');const active=resourceStore(req);mutating=true;try{const result=await active.apply(req.body.id);try{await downloader(active).markApplied(req.body.id,result.id);}catch(error){result.message+='；任务记录写入失败：'+error.message;}if(result.requiresDeploy!==false){try{await recordDeploymentChanges(active,result.files);}catch(error){result.message+='；待部署记录写入失败：'+error.message;}deployment={state:'idle',message:'尚未发起部署'};}return result;}finally{mutating=false;}}));
 app.post('/api/restore',route(async req=>{if(deployment.state==='running')throw new Error('部署期间请等待后再恢复');const active=resourceStore(req);mutating=true;try{const result=await active.restore(req.body.id);if(result.requiresDeploy!==false){const record=JSON.parse(await fs.readFile(path.join(active.dataDir,req.body.id,'record.json'),'utf8'));try{await recordDeploymentChanges(active,record.files.map(x=>x.file));}catch(error){result.message+='；待部署记录写入失败：'+error.message;}deployment={state:'idle',message:'尚未发起部署'};}return result;}finally{mutating=false;}}));
 app.get('/api/source',route(async req=>{const repo=repos.find(r=>r.id===req.query.repo);if(!repo?.available||!repo.files.includes(req.query.file))throw new Error('源码文件不在浏览清单内');let stdout=offlineSources[repo.id]?.files[req.query.file];if(stdout===undefined)({stdout}=await exec('git',['-C',path.join(sourceRoot,repo.id),'show',`${repo.commit}:${req.query.file}`],{maxBuffer:2*1024*1024}));return {text:stdout,commit:repo.commit,url:repo.id==='rime-wiki'?`${repo.url}/${String(req.query.file).replace('.md','')}`:`${repo.url}/blob/${repo.commit}/${req.query.file}`};}));
 app.get('/api/deployment',route(async()=>deployment));
@@ -130,4 +148,4 @@ app.use(express.static(path.join(root,'public')));
 app.use((e,req,res,next)=>res.status(e.status||400).json({error:e.message||'操作失败'}));
 const server=app.listen(port,'127.0.0.1',()=>console.log(`Rime Studio ready: http://127.0.0.1:${port}`));
 server.on('error',error=>{console.error(`服务启动失败 (${port}): ${error.message}`);process.exit(1);});
-for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{server.close(()=>process.exit(0));server.closeIdleConnections();});
+let stopping=false;for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{if(stopping)return;stopping=true;const closed=new Promise(resolve=>server.close(resolve));server.closeIdleConnections();await Promise.allSettled([...allDownloaders].map(manager=>manager.shutdown()));await closed;process.exit(0);});

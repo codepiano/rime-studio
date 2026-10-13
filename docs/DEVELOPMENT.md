@@ -181,3 +181,15 @@ macOS `sandbox-exec` 阻止网络、额外程序执行、临时目录之外写�
 `deployment.js` 观察编译配置的源文件／自定义文件时间及整个 build 产物的大小、mtime、ctime，连续稳定两次才确认观察到编译更新。保存／恢复记录待部署文件及哈希到对应备份目录的 `pending-deployment.json`，重启仍保留待部署提示；学习删除不记录为需要部署。
 
 固定短语表变更可能完全不改写编译 YAML。仅此类资源待部署时，会核对文件哈希、方案挂载和隔离会话中的样本候选，返回 `resources-checked`；不把没有 YAML 更新视为失败，也不宣称系统输入法的真实会话已生效。新编译产物的 `verified` 同样只确认编译观察。没有足够依据、资源后续变化或编译未完成时保留待部署记录及明确状态。
+
+## 更新冲突、下载任务、备份与迁移
+
+`package-conflicts.js` 在对应备份目录的 `package-bases/` 中保存按 SHA-256 命名的上游原始内容，安装记录增加 `upstreamFiles`。默认仍保留本地修改；预览可按冲突文件选择 keep／upstream／merge。对比与三方合并使用临时文件、固定 Git 参数和输出／时间上限。没有旧基线时不伪造三方结果，文本可手动合并；大于 1 MB 的对比总量或二进制不在页面编辑。解决时重新核对所有本地守卫、源文件哈希和配置版本，拒绝未解决标记、非法 YAML、循环引用及原型补丁路径。`packagePlan` 只在服务端预览内存中使用，不返回给客户端或写入备份。
+
+`download-tasks.js` 负责任务范围、阶段、日志、取消、重试与记录；`task-process.js` 使用独立进程组，取消／超时／超限时终止该组。plum 沿用受限执行策略并接入相同取消信号与输出回调。任务 JSON 保存在对应目录的 `.data/packages/<目录哈希>/jobs/`，日志最多保留末尾 12 KB；不把完整文件差异持久化。正常停服等待取消与记录写入，重启时将未完成记录标为 interrupted，不根据旧 PID 强行终止其他进程。重试创建新 ID；已准备任务可从暂存文件重新核验并生成预览，plum 的种子配置改变时要求重新准备。列表展示最近 100 个任务，更多记录仍保留在目录中。网页轮询只绘制独立任务区域，不自动弹开预览或重绘编辑器。
+
+`backup-history.js` 的 `/api/history` 支持 q／kind／status／offset／limit；默认 20 条、最多 100 条／页，读取全部 UUID 备份目录并缓存文件大小／时间对应的摘要。读取失败会列出警告，失败记录亦可浏览；`/api/history/:id` 提供备份自身差异，恢复仍走原始 `ConfigStore.restore`。兼容旧设置备份和原生学习备份，不将学习数据库展示为普通文本词频差异。
+
+`migration.js` 的 export／inspect／preview 使用写令牌与连接 ID，检查与导入分开。导出最多 200 个 UTF-8 文件／20 MB 数据；JSON 文件／HTTP 解析上限分别为 30 MB／32 MB。白名单只允许声明且已安装方案的 `.custom.yaml`、对应个人／扩展词库、词库管理记录及虚拟配置里确实挂载的短语表。临时配置目录仅用于检查，真实目录在 apply 前不写入。检查哈希、文件路径、重复、词库头部／依赖、短语格式及补丁安全性；导入默认保留已有冲突，预览与 apply 再次检查目标和依赖守卫。管理记录保留其他方案。导入复用资源事务、备份和恢复，既不迁移工作台目录设置，也不打包学习数据库或上游方案。
+
+新增接口：`GET /api/packages/tasks`、`POST /api/packages/download/:id/cancel|retry|preview`、`GET /api/packages/conflict`、`POST /api/packages/resolve/preview`、`GET /api/history`／`:id`、`POST /api/migration/export|inspect|preview`。新 GET 浏览接口绑定连接 ID；写入与取消／重试同样校验本机来源、令牌和连接身份。

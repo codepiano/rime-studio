@@ -3,7 +3,7 @@ import {realpathSync} from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
-import {spawn} from 'node:child_process';
+import {runTask} from './task-process.js';
 import {readText,readResource,digest,safeFile} from './file-transactions.js';
 export const PLUM_COMMIT='b1be1969f914cc005add4090631b855db00c2591';
 const fail=message=>{throw new Error(message);};
@@ -29,16 +29,8 @@ export function sandboxProfile(workDir,extraProtected=[]){
   protectedRoots.map(root=>`(deny file-read-data (require-all (subpath ${quote(root)}) (require-not (subpath ${quote(workDir)}))))`).join('\n')+
   '\n(deny mach-lookup (global-name "com.apple.coreservices.appleevents"))\n';
 }
-export function runSandbox(workDir,args,{timeout=240000,protectedRoots=[]}={}){
- return new Promise((resolve,reject)=>{
-  const child=spawn('/usr/bin/sandbox-exec',['-p',sandboxProfile(workDir,protectedRoots),...args],{cwd:workDir,detached:true,stdio:['ignore','pipe','pipe'],env:{PATH:'/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin',HOME:os.homedir(),TMPDIR:path.join(workDir,'tmp'),LC_ALL:'C',GIT_TERMINAL_PROMPT:'0',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_COUNT:'4',GIT_CONFIG_KEY_0:'core.hooksPath',GIT_CONFIG_VALUE_0:'/dev/null',GIT_CONFIG_KEY_1:'credential.helper',GIT_CONFIG_VALUE_1:'',GIT_CONFIG_KEY_2:'protocol.file.allow',GIT_CONFIG_VALUE_2:'never',GIT_CONFIG_KEY_3:'protocol.ext.allow',GIT_CONFIG_VALUE_3:'never'}});
-  let stdout='',stderr='',failure=null,bytes=0;
-  const stop=message=>{failure=new Error(message);if(child.pid)try{process.kill(-child.pid,'SIGKILL');}catch{}};
-  const timer=setTimeout(()=>stop('plum 准备超时，请检查网络后重试'),timeout);
-  for(const [stream,isError]of [[child.stdout,false],[child.stderr,true]])stream.on('data',chunk=>{bytes+=chunk.length;if(bytes>2*1024*1024){stop('plum 输出超过限制');return;}if(isError)stderr+=chunk.toString();else stdout+=chunk.toString();});
-  child.on('error',error=>{clearTimeout(timer);reject(new Error(error.code==='ENOENT'?'当前系统缺少 sandbox-exec，无法安全运行 plum':error.message));});
-  child.on('close',(code,signal)=>{clearTimeout(timer);if(failure)return reject(failure);if(code!==0)return reject(new Error(`plum 准备失败（${signal||code}）：${stderr.slice(-2500)||stdout.slice(-2500)}`));resolve({stdout,stderr});});
- });
+export function runSandbox(workDir,args,{timeout=240000,protectedRoots=[],signal,onOutput}={}){
+ return runTask('/usr/bin/sandbox-exec',['-p',sandboxProfile(workDir,protectedRoots),...args],{cwd:workDir,timeout,signal,onOutput,label:'plum 准备',env:{PATH:'/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin',HOME:os.homedir(),TMPDIR:path.join(workDir,'tmp'),LC_ALL:'C',GIT_TERMINAL_PROMPT:'0',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_COUNT:'4',GIT_CONFIG_KEY_0:'core.hooksPath',GIT_CONFIG_VALUE_0:'/dev/null',GIT_CONFIG_KEY_1:'credential.helper',GIT_CONFIG_VALUE_1:'',GIT_CONFIG_KEY_2:'protocol.file.allow',GIT_CONFIG_VALUE_2:'never',GIT_CONFIG_KEY_3:'protocol.ext.allow',GIT_CONFIG_VALUE_3:'never'}});
 }
 function supported(file){
  if(file.startsWith('.')||file.split('/').some(part=>['build','sync','trash','backup'].includes(part)||part.endsWith('.userdb')))return false;
@@ -57,9 +49,9 @@ export async function stageFiles(root,prefix=''){
  }
  return files;
 }
-export async function preparePlum(store,cacheDir,input){
+export async function preparePlum(store,cacheDir,input,{signal,onOutput,onPhase=()=>{}}={}){
  if(process.platform!=='darwin')fail('plum 配方执行目前仅支持 macOS');
- const restriction={protectedRoots:[store.userDir]};
+ const restriction={protectedRoots:[store.userDir],signal,onOutput};
  const recipes=resolveRecipes(input),revision=(await store.snapshot()).revision;
  await fs.mkdir(cacheDir,{recursive:true,mode:0o700});const workDir=await fs.realpath(cacheDir);
  const outputDir=path.join(workDir,'output'),engineDir=path.join(workDir,'plum');
@@ -73,7 +65,9 @@ export async function preparePlum(store,cacheDir,input){
   }
  }
  // Pin the installer itself. Fetch and recipe execution share the same confinement.
+ onPhase('installer','正在获取固定版本的 plum…');
  await runSandbox(workDir,['/bin/bash','-c',`git init plum && git -C plum remote add origin https://github.com/rime/plum.git && git -C plum fetch --depth 1 origin ${PLUM_COMMIT} && git -C plum checkout --detach FETCH_HEAD`],restriction);
+ onPhase('recipe','正在运行配方并下载方案…');
  const result=await runSandbox(workDir,['/usr/bin/env',`rime_dir=${outputDir}`,`plum_dir=${engineDir}`,'/bin/bash',path.join(engineDir,'rime-install'),...recipes],restriction);
  const sources=[];
  const packageRoot=path.join(engineDir,'package');
