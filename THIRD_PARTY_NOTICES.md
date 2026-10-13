@@ -42,3 +42,7 @@ Rime 文档的作者、示例作者及贡献者署名仍保留在原始内容中
 ## 按需运行的 plum 安装器
 
 新增运行时适配通过 Git 按需获取 [rime/plum](https://github.com/rime/plum) 的固定提交 `b1be1969f914cc005add4090631b855db00c2591`（LGPL v3），不把安装器代码改写为本项目原创实现。原仓库及许可证保留在对应任务缓存，配方获取的各方案仍适用其独立授权。来源提交和安装文件哈希进入本地安装记录。
+
+## 输入诊断公共接口
+
+`native/librime/rime_api.h` 使用 [librime 1.16.0 的公开 C 接口头文件](https://github.com/rime/librime/blob/1.16.0/src/rime_api.h)，保留原始版权声明与 BSD 三条款许可证（`native/librime/LICENSE`）。诊断助手通过该接口动态加载用户本机已安装的鼠须管引擎，不打包引擎二进制。助手核对可用接口，并在独立的受限进程和临时目录中编译及试输。

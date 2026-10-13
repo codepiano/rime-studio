@@ -67,7 +67,7 @@ test('library APIs bind resource writes to connection identity and enforce input
  assert.equal((await app.request('/api/library/phrases/preview',payload,'wrong')).status,403);
  const preview=await app.request('/api/library/phrases/preview',payload,state.token);assert.equal(preview.status,200);
  const write=await app.request('/api/apply',{id:preview.data.id,connectionId:state.connection.id},state.token);assert.equal(write.status,200);
- assert.match(await fs.readFile(path.join(one.userDir,'studio_test_phrases.txt'),'utf8'),/知键/);
+ assert.match(await fs.readFile(path.join(one.userDir,'studio_test_phrases.txt'),'utf8'),/知键/);assert.ok((await app.request('/api/state')).data.pendingDeployment.includes('studio_test_phrases.txt'));
  const unsafe=await app.request('/api/library/dictionary?file=..%2Foutside.dict.yaml');assert.equal(unsafe.status,400);
  const arbitrary=await app.request('/api/packages/download',{package:'https://example.com/arbitrary',mode:'full',enable:true,connectionId:state.connection.id},state.token);assert.equal(arbitrary.status,400);
  const two=await dirs(app.dir,'library-two');await app.request('/api/connection',two,state.token);
@@ -78,4 +78,15 @@ test('standalone dictionary install handles larger files and preserves write pro
  const payload={text:'---\nname: imported\n...\n'+Array.from({length:18000},(_,i)=>`词${i}\tci\t100`).join('\n'),schema:'test',activate:true,connectionId:state.connection.id};assert.ok(Buffer.byteLength(payload.text)>150000);
  assert.equal((await app.request('/api/library/install/preview',payload,'bad')).status,403);const preview=await app.request('/api/library/install/preview',payload,state.token);assert.equal(preview.status,200);const save=await app.request('/api/apply',{id:preview.data.id,connectionId:state.connection.id},state.token);assert.equal(save.status,200);assert.equal((await app.request('/api/library')).data.schemas[0].tables.includes('imported'),true);
  const bad=await app.request('/api/library/manage/preview',{action:'delete',file:'../outside.dict.yaml',hash:'x',connectionId:state.connection.id},state.token);assert.equal(bad.status,400);assert.equal((await app.request('/api/learned/lifecycle',{action:'pause',connectionId:state.connection.id},state.token)).status,400);assert.equal((await app.request('/api/learned/sync',{connectionId:state.connection.id},state.token)).status,400);
+});
+test('unified search and diagnosis bind to current connection and protect native requests',async t=>{
+ const app=await launch(t),initial=(await app.request('/api/state')).data,one=await dirs(app.dir,'search-diagnosis');
+ await fs.writeFile(path.join(one.userDir,'test.schema.yaml'),'schema: {schema_id: test, name: 测试}\nengine: {processors: [speller, selector, navigator, express_editor], segmentors: [abc_segmentor, fallback_segmentor], translators: [table_translator@phrases]}\nspeller: {alphabet: abcdefghijklmnopqrstuvwxyz}\nphrases: {dictionary: "", user_dict: phrases, db_class: stabledb}\n');
+ await fs.writeFile(path.join(one.userDir,'phrases.txt'),'知键\tzj\t100\n');const state=(await app.request('/api/connection',one,initial.token)).data;
+ const found=await app.request(`/api/search?q=${encodeURIComponent('知键')}&connectionId=${state.connection.id}`);assert.equal(found.status,200);assert.equal(found.data.total,1);assert.equal(found.data.results[0].target.file,'phrases.txt');assert.equal(found.data.learnedLoaded,false);
+ assert.equal((await app.request('/api/search?q=word&connectionId=old')).status,400);
+ assert.equal((await app.request('/api/diagnosis',{schema:'test',code:'zj',connectionId:state.connection.id},'wrong')).status,403);
+ assert.equal((await app.request('/api/diagnosis',{schema:'test',code:'zj',connectionId:'old'},state.token)).status,400);
+ const trial=await app.request('/api/diagnosis',{schema:'test',code:'zj',expected:'知键',connectionId:state.connection.id},state.token);assert.equal(trial.status,200);assert.ok(trial.data.trial.candidates.some(x=>x.text==='知键'));assert.equal(trial.data.connectionId,state.connection.id);
+ await assert.rejects(fs.access(path.join(one.userDir,'build')),/ENOENT/);
 });

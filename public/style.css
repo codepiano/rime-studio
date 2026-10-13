@@ -162,3 +162,20 @@ dialog.review-dialog{width:min(1180px,calc(100vw - 40px))}
 .phrase-search-label input{flex:1;min-width:0}.phrase-feedback{font-size:12px;line-height:1.8;overflow-wrap:anywhere}.phrase-feedback.has-issues{margin-top:14px;padding:12px;background:#f8f1e6;border:1px solid #e8dec9;border-radius:6px;color:#997751}
 @media(max-width:800px){.text-tool-columns{grid-template-columns:1fr}.text-tool-columns textarea{min-height:160px}}
 @media(max-width:650px){.tool-query .inlineform{flex-wrap:wrap}.tool-query input{flex-basis:100%}.tool-query .btn{width:100%}.tool-mode{align-items:flex-start}.tool-mode select{width:100%}.phrase-search-label{flex-wrap:wrap}.phrase-search-label input{flex-basis:100%}.sidebar{overflow-y:auto}}
+
+.search-resource {display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid var(--line,#e5e4df)}
+.search-resource code {margin-left:14px;overflow-wrap:anywhere}
+.search-resource p {overflow-wrap:anywhere;margin:6px 0 0}
+.search-resource .library-actions {flex-shrink:0}
+.diagnosis-form {display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:end}
+.diagnosis-form label {display:flex;flex-direction:column;gap:8px;font-size:13px}
+.diagnosis-form input,.diagnosis-form select {min-width:0;max-width:none;width:100%;padding:10px;border:1px solid var(--line,#e5e4df);border-radius:8px;background:transparent}
+.diagnosis-check {display:flex;align-items:flex-start;gap:12px;padding:12px;border-bottom:1px solid var(--line,#e5e4df)}
+.diagnosis-check p {font-size:13px;margin:5px 0 0;overflow-wrap:anywhere}
+.diagnosis-check.warning .tag,.diagnosis-check.error .tag {background:#fbebd4;color:#855629}
+.diagnosis-candidates {display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.diagnosis-candidate {display:flex;align-items:baseline;gap:10px;padding:14px;background:var(--bg,#f4f3ee);border-radius:8px;overflow-wrap:anywhere}
+.diagnosis-candidate.expected {outline:2px solid #7b9a7c}
+.diagnosis-candidate small,.diagnosis-candidate span {font-size:12px;color:var(--muted,#777)}
+@media(max-width:900px){.diagnosis-form{grid-template-columns:1fr 1fr}.search-resource{align-items:flex-start;flex-direction:column}}
+@media(max-width:550px){.diagnosis-form{grid-template-columns:1fr}.search-resource code{display:block;margin:6px 0 0}}
