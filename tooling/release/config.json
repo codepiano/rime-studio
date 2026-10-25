@@ -14,10 +14,16 @@
     [
       "npm",
       "ci"
+    ],
+    [
+      "npm",
+      "run",
+      "build"
     ]
   ],
   "outputs": [
-    "node_modules"
+    "node_modules",
+    "dist"
   ],
   "persistent": [
     ".data"

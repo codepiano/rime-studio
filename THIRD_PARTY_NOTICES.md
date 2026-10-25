@@ -19,6 +19,8 @@ Rime 文档的作者、示例作者及贡献者署名仍保留在原始内容中
 
 | 依赖 | 上游 |
 | --- | --- |
+| React / React DOM 19.3.1 | <https://github.com/facebook/react>，MIT |
+| Mantine core / hooks 9.7.3 | <https://github.com/mantinedev/mantine>，MIT |
 | express | <https://github.com/expressjs/express> |
 | yaml | <https://github.com/eemeli/yaml> |
 | diff / jsdiff | <https://github.com/kpdecker/jsdiff> |

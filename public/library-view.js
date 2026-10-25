@@ -1,3 +1,4 @@
+import {renderHTML} from './render.js';
 import {mountTasks} from './task-view.js';
 import {mountLearned} from './learned-view.js';
 import {phraseRows,phraseProblems,rewritePhrases} from './phrase-format.js';
@@ -11,14 +12,14 @@ export async function mountLibrary(root,{api,review,notify,connection,schema,see
  if(remembered.connection!==connection)remembered={connection,tab:'packages',schema};
  let tab=target?.tab||(seed!==null?'phrases':remembered.tab),selectedSchema=target?.schema||remembered.schema||schema,inventory,packages,editor=null,editorType='phrases',dictionary=null,query='',taskPanel=null,downloadRunning=false,stopped=false,loading=false,request=0,editorError='';
  const alive=()=>root.isConnected&&!stopped;
- root.innerHTML='<div class="loading">正在读取方案与词库…</div>';
+ renderHTML(root,'<div class="loading">正在读取方案与词库…</div>');
  try{[inventory,packages]=await Promise.all([api('/api/library'),api('/api/packages')]);if(!alive())return;selectedSchema=inventory.schemas.some(x=>x.id===selectedSchema)?selectedSchema:inventory.schemas[0]?.id||'';draw();if(tab==='phrases'&&selectedSchema)loadEditor('phrases',target?.file);if(target?.personal&&selectedSchema)loadEditor('personal');}
- catch(error){if(alive())root.innerHTML=`<div class="notice">${esc(error.message)}</div>`;return;}
+ catch(error){if(alive())renderHTML(root,`<div class="notice">${esc(error.message)}</div>`);return;}
  function tabs(){return `<div class="tabs" role="tablist">${[['packages','获取和更新方案'],['dictionaries','我的词库'],['learned','学会的词'],['phrases','快捷短语']].map(([id,label])=>`<button class="tab ${tab===id?'active':''}" role="tab" aria-selected="${tab===id}" data-library-tab="${id}">${label}</button>`).join('')}</div>`;}
  function picker(){return `<label class="library-picker">输入方案 <select id="library-schema">${inventory.schemas.map(x=>`<option value="${esc(x.id)}" ${x.id===selectedSchema?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>`;}
  function draw(){
   if(!alive())return;remembered={connection,tab,schema:selectedSchema};
-  root.innerHTML=tabs()+'<div id="download-tasks-root"></div>'+(tab==='packages'?packageView():tab==='dictionaries'?dictionaryView():tab==='learned'?'<div id="learned-root"></div>':phraseView());
+  renderHTML(root,tabs()+'<div id="download-tasks-root"></div>'+(tab==='packages'?packageView():tab==='dictionaries'?dictionaryView():tab==='learned'?'<div id="learned-root"></div>':phraseView()));
   root.querySelectorAll('[data-library-tab]').forEach(button=>button.onclick=()=>{collect();tab=button.dataset.libraryTab;editor=null;editorError='';draw();if(tab==='phrases'&&selectedSchema)loadEditor('phrases');});
   root.querySelector('#library-schema')?.addEventListener('change',event=>{collect();selectedSchema=event.target.value;editor=null;dictionary=null;editorError='';draw();if(tab==='phrases')loadEditor('phrases');});
   root.querySelector('#phrase-file')?.addEventListener('change',event=>{collect();loadEditor('phrases',event.target.value);});

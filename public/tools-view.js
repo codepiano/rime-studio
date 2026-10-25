@@ -1,3 +1,4 @@
+import {renderHTML} from './render.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state={tab:'dictionary',term:'',definition:null,input:'',mode:'s2t',output:null};
 let dictionaryRequest=0,conversionRequest=0;
@@ -7,12 +8,12 @@ export async function mountTools(root,{api,notify,addPhrase,connected}) {
   if(!root)return;
   const alive=()=>root.isConnected;
   let info,busy=false;
-  root.innerHTML='<div class="loading">正在读取文字工具…</div>';
+  renderHTML(root,'<div class="loading">正在读取文字工具…</div>');
   try {info=await api('/api/tools');if(alive())draw();}
-  catch(error){if(alive())root.innerHTML=`<div class="notice" role="alert">${esc(error.message)}</div>`;}
+  catch(error){if(alive())renderHTML(root,`<div class="notice" role="alert">${esc(error.message)}</div>`);}
   function draw(){
     if(!alive())return;
-    root.innerHTML=`<div class="tabs" role="tablist">${[['dictionary','系统词典'],['convert','OpenCC 工具箱']].map(([id,label])=>`<button class="tab ${state.tab===id?'active':''}" role="tab" aria-selected="${state.tab===id}" data-tool-tab="${id}" ${busy?'disabled':''}>${label}</button>`).join('')}</div>${state.tab==='dictionary'?dictionaryView():convertView()}`;
+    renderHTML(root,`<div class="tabs" role="tablist">${[['dictionary','系统词典'],['convert','OpenCC 工具箱']].map(([id,label])=>`<button class="tab ${state.tab===id?'active':''}" role="tab" aria-selected="${state.tab===id}" data-tool-tab="${id}" ${busy?'disabled':''}>${label}</button>`).join('')}</div>${state.tab==='dictionary'?dictionaryView():convertView()}`);
     root.querySelectorAll('[data-tool-tab]').forEach(button=>button.onclick=()=>{state.tab=button.dataset.toolTab;draw();});
     root.querySelector('#system-dictionary-form')?.addEventListener('submit',async event=>{
       event.preventDefault();if(busy)return;state.term=root.querySelector('#dictionary-term').value;const ticket=++dictionaryRequest;busy=true;state.definition=null;draw();

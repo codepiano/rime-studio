@@ -1,3 +1,4 @@
+import {renderHTML} from './render.js';
 const words=[
  {id:'good',word:'你好',kind:'原词库'},
  {id:'mistake',word:'拟好',kind:'用户词 · 误选记录'},
@@ -23,7 +24,7 @@ export function renderForgetDemo(){return `<section class="playground forget-dem
 export function bindForgetDemo(root){
  if(!root)return;
  const state={selected:'good',removed:false};
- function update(focus){root.innerHTML=exercise(state);if(focus==='list')root.querySelector('.forget-candidates').focus({preventScroll:true});if(focus==='result')root.querySelector('[data-forget-restart]').focus({preventScroll:true});}
+ function update(focus){renderHTML(root,exercise(state));if(focus==='list')root.querySelector('.forget-candidates').focus({preventScroll:true});if(focus==='result')root.querySelector('[data-forget-restart]').focus({preventScroll:true});}
  function remove(){if(state.selected!=='mistake'||state.removed)return;state.removed=true;state.selected=null;update('result');}
  root.addEventListener('click',event=>{
   const word=event.target.closest('[data-forget-word]');

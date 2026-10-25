@@ -1,0 +1,36 @@
+/* All Mantine integration rules live here; pages own layout only. */
+body { line-height: normal; }
+.studio-field { min-width: 0; max-width: 100%; }
+.studio-field .mantine-Input-input { color: var(--ink); border-color: var(--line); border-radius: 5px; background-color: #fff; font: inherit; }
+.studio-field .mantine-Input-input:focus { border-color: var(--green); outline: 2px solid #a8b798; outline-offset: 2px; }
+.studio-field .mantine-Input-input:disabled { background: #f1f3eb; opacity: .55; }
+.studio-field .studio-select { font-size: 12px; padding-inline: 12px 36px; appearance: none; background-image: none; text-overflow: ellipsis; }
+.studio-field .mantine-NativeSelect-section { color: var(--muted); width: 36px; }
+.studio-check { display: inline-flex; vertical-align: middle; flex-shrink: 0; }
+.studio-check input { padding: 0; }
+.studio-switch { flex-shrink: 0; }
+.studio-switch .mantine-Switch-track { cursor: pointer; }
+.search .studio-field { flex: 1; }
+.search .mantine-Input-input { border: 0; background: transparent; padding: 0; min-height: 18px; height: 18px; font-size: 12px; }
+.inlineform > .studio-field { flex: 0 1 auto; }
+.connection-form .studio-field, .diagnosis-form .studio-field { width: 100%; }
+.library-editor td .studio-field { width: 100%; }
+.text-tool-columns .studio-field { width: 100%; }
+.text-tool-columns textarea { margin-top: 10px; min-height: 220px; line-height: 1.8; }
+.studio-overlay { border: 1px solid var(--line); background: #fcfcf8; color: var(--ink); border-radius: 14px; max-height: 85vh; overflow: auto; }
+.studio-overlay-body { padding: 0; }
+.studio-overlay .modalhead { position: relative; }
+.studio-overlay :focus-visible, .mantine-Button-root:focus-visible, .mantine-UnstyledButton-root:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+#toast { z-index: 300; }
+
+.mantine-Button-root.btn { height: auto; min-height: 36px; font-weight: 400; }
+.mantine-Button-root.btn.small { min-height: 28px; }
+.mantine-Button-root .mantine-Button-inner { gap: 7px; }
+.mantine-Button-root .mantine-Button-label { overflow: visible; }
+
+.studio-select-field { width: 210px; }
+.studio-field .studio-select { width: 100%; max-width: none; }
+.app-row .studio-select-field { width: 140px; }
+.library-picker .studio-select-field { min-width: 200px; }
+.diagnosis-form .studio-select-field { width: 100%; }
+.studio-overlay { position: relative; isolation: isolate; }

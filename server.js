@@ -144,7 +144,8 @@ app.post('/api/deploy',route(async req=>{
 }));
 app.get('/vendor/diff2html.min.js',(req,res)=>res.sendFile(path.join(root,'node_modules/diff2html/bundles/js/diff2html.min.js')));
 app.get('/vendor/diff2html.min.css',(req,res)=>res.sendFile(path.join(root,'node_modules/diff2html/bundles/css/diff2html.min.css')));
-app.use(express.static(path.join(root,'public')));
+app.use(express.static(path.join(root,'dist')));
+app.use(express.static(path.join(root,'public'),{index:false}));
 app.use((e,req,res,next)=>res.status(e.status||400).json({error:e.message||'操作失败'}));
 const server=app.listen(port,'127.0.0.1',()=>console.log(`Rime Studio ready: http://127.0.0.1:${port}`));
 server.on('error',error=>{console.error(`服务启动失败 (${port}): ${error.message}`);process.exit(1);});

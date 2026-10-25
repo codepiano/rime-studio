@@ -1,0 +1,21 @@
+// Dependency order follows Mantine's per-component CSS manifest.
+import '@mantine/core/styles/baseline.css';
+import '@mantine/core/styles/default-css-variables.css';
+import '@mantine/core/styles/global.css';
+import '@mantine/core/styles/UnstyledButton.css';
+import '@mantine/core/styles/VisuallyHidden.css';
+import '@mantine/core/styles/Loader.css';
+import '@mantine/core/styles/Button.css';
+import '@mantine/core/styles/InlineInput.css';
+import '@mantine/core/styles/Input.css';
+import '@mantine/core/styles/Checkbox.css';
+import '@mantine/core/styles/Radio.css';
+import '@mantine/core/styles/Switch.css';
+import '@mantine/core/styles/Combobox.css';
+import '@mantine/core/styles/Paper.css';
+import '@mantine/core/styles/CloseButton.css';
+import '@mantine/core/styles/Overlay.css';
+import '@mantine/core/styles/ModalBase.css';
+import '@mantine/core/styles/Modal.css';
+import '@mantine/core/styles/Drawer.css';
+import './base.css';

@@ -11,3 +11,6 @@ output/playwright/
 work/
 *.pid
 .runtime/
+dist/
+test-results/
+playwright-report/

@@ -14,13 +14,14 @@
 
 - macOS，已经安装并使用鼠须管。
 - 已存在的 Rime 用户目录 `~/Library/Rime`。
-- Node.js 22 或以上；目前验证使用 Node.js 26。
+- Node.js 22.12 或以上；目前验证使用 Node.js 26。
 - npm。首次安装依赖需要联网，运行后使用本机服务。
 
 ```bash
 git clone https://github.com/codepiano/rime-studio.git
 cd rime-studio
 npm ci
+npm run build
 npm start
 ```
 

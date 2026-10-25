@@ -1,0 +1,2 @@
+/* Restore inheritance before the existing semantic button classes apply sizes. */
+.mantine-UnstyledButton-root { font: inherit; }

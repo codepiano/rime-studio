@@ -2,7 +2,7 @@
 
 ## 技术与结构
 
-项目使用 Node.js / Express、原生 HTML / CSS / JavaScript、yaml 文档节点、jsdiff 和 diff2html。没有前端构建步骤，第三方浏览器组件由本机依赖目录提供。
+项目使用 Node.js / Express、React 19 / Mantine 9、Vite、yaml 文档节点、jsdiff 和 diff2html。前端构建到 `dist/`，原有业务控制器保留在 `public/`；diff2html 仍由本机依赖目录的专用路由提供。
 
 ```text
 server.js                 本机 HTTP 服务、请求检查、源码读取、部署状态
@@ -29,7 +29,13 @@ content.js                按使用目的整理的操作卡与组件说明
 public/app.js             页面、导航、控件与操作卡
 public/forget-demo.js     误选词移除教学练习
 public/symbols.js         已部署标点映射的反向查询
-public/style.css          界面样式
+frontend/main.tsx         React 入口，先安装公共渲染器再加载业务控制器
+frontend/ui/index.tsx     公共组件导出、主题、模板适配与弹层生命周期
+frontend/ui/styles.ts     按组件及其依赖引入 Mantine CSS
+frontend/ui/controls.css  公共控件集成样式
+public/render.js          显式模板渲染接口，保留控制器 DOM 事件契约
+public/style.css          页面布局与既有公共视觉样式
+dist/                     构建产物，不提交
 test/                     配置、文件差异、符号反查测试
 research-snapshots.json   固定提交的公开上游调研文件
 .data/                    本地运行数据与个人配置备份，不提交
@@ -39,11 +45,21 @@ research-snapshots.json   固定提交的公开上游调研文件
 
 ```bash
 npm ci
+npm run typecheck
 npm test
+npm run test:ui
 npm start
 ```
 
-静态前端文件刷新即生效；后端模块和操作卡内容在启动时加载，修改后需要重启服务。启动器与生命周期脚本共用清单端口 4312；调试自定义端口使用终端前台启动。
+前端修改需要 `npm run build`。类型检查覆盖新增公共 React 层、构建配置与浏览器测试；既有 JavaScript 控制器由原有测试和浏览器流程验证。仅在独立 checkout 中安装依赖、构建和验证，不在正在使用的服务目录中构建或刷新用户页面。启动器与生命周期脚本共用清单端口 4312；调试自定义端口使用终端前台启动。
+
+`npm run test:ui` 先构建，再自动分配独立回环端口并生成临时 Rime 用户目录、共享目录、工作台数据和浏览器存储，禁用真实部署。测试结束只清理本次进程与临时目录。默认使用 macOS Chrome 的独立无头进程，可用 `CHROME_PATH` 指定浏览器路径；不会连接个人 Chrome 会话。仅验证桌面。
+
+公共组件只从 `frontend/ui` 导入。现有模板通过显式 `renderHTML` 映射为 Mantine 控件；保留原有 id/name/data 属性、原生表单语义、非受控值和事件绑定。重画前先从内向外卸载嵌套 React 根，避免异步页面切换残留。NativeSelect 保留原生选单和键盘行为；范围滑块、文件选择与隐藏字段继续保留原生语义。弹层改用 Modal，Drawer 由公共入口提供，当前没有待迁移的业务抽屉。
+
+不要在页面单独覆盖基础控件。样式入口依次加载 Mantine 所需 CSS、原有布局样式、公共控件集成样式。不得直接引入全量 `@mantine/core/styles.css`。新增控件时需在 `frontend/ui/styles.ts` 补齐其依赖 CSS。安装脚本和发布 prepare 已接入构建，但验证命令不会启动、合并或发布正式服务。
+
+迁移版本、包体积口径和验收结果见 [Mantine 迁移记录](MANTINE_MIGRATION.md)。
 
 测试覆盖：补丁语义、注释保留、继承、字段校验、只读预览、精确恢复、外部变化、符号链接、重复覆盖、差异字节重建、HTML 文本转义、符号查询和推荐按法。
 

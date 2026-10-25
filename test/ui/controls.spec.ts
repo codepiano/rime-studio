@@ -1,0 +1,94 @@
+import { test, expect } from '@playwright/test';
+import fs from 'node:fs/promises';
+const output = 'output/playwright';
+test.beforeEach(async ({page}) => { await page.goto('/'); await expect(page.locator('.shell')).toBeVisible(); expect(await page.locator('.reset').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('10px'); });
+test('settings switches, select, checkbox, keyboard, preview, save and readback', async ({page}) => {
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.locator('.studio-switch').filter({has: page.locator('[data-toggle="inline"]')}).locator('.mantine-Switch-track').click();
+  await expect(page.locator('[data-toggle="inline"]')).not.toBeChecked();
+  await page.locator('[data-range="page_size"]').focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Tab');
+  await expect(page.locator('.valuebox').first()).toHaveText('6');
+  await page.locator('[data-tab="keyboard"]').click();
+  await page.locator('[data-select="shift_left"]').selectOption('commit_code');
+  await page.locator('[data-hotkey="Control+Shift+grave"]').check();
+  await page.locator('[data-action="review"]').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('#modal')).toContainText('每页 6 个候选');
+  await page.locator('[data-action="preview"]').click();
+  await expect(page.locator('[data-action="apply"]')).toBeVisible();
+  await expect(page.locator('.file-diffs')).toContainText('default.custom.yaml');
+  await page.screenshot({path: output+'/settings-review.png', fullPage: true});
+  await page.locator('[data-action="apply"]').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const state = await (await page.request.get('/api/state')).json();
+  expect(state.defaults.menu.page_size).toBe(6); expect(state.squirrel.style.inline_preedit).toBe(false);
+  expect(state.defaults.ascii_composer.switch_key.Shift_L).toBe('commit_code');
+  expect(state.defaults.switcher.hotkeys).toContain('Control+Shift+grave');
+  await page.reload(); await expect(page.locator('[data-range="page_size"]')).toHaveValue('6');
+  expect(await fs.readFile(process.env.RIME_QA_USER_DIR+'/default.custom.yaml','utf8')).toContain('6');
+  expect(errors).toEqual([]);
+});
+test('desktop pages, nested async controllers, conversion form and dialog focus', async ({page}) => {
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  for (const view of ['connection','library','diagnostics','pipeline','guide','tools','settings']) {
+    await page.locator(`[data-view="${view}"]`).first().click();
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({path: output+`/desktop-${view}.png`,fullPage: true});
+  }
+  await page.keyboard.press('Control+k'); await expect(page.locator('#search')).toBeFocused();
+  await page.locator('#search').fill('候选'); await expect(page.locator('#search')).toHaveValue('候选');
+  await page.locator('[data-view="tools"]').click();
+  await page.locator('[data-tool-tab="convert"]').click();
+  await page.locator('#convert-input').fill('鼠标和软件'); await page.locator('#convert-mode').selectOption('s2twp');
+  await page.locator('#convert-form button[type="submit"]').click();
+  await expect(page.locator('#convert-output')).toHaveValue('滑鼠和軟體');
+  await page.locator('[data-view="settings"]').click();
+  const opener=page.locator('[data-article]').first(); await opener.focus(); await opener.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(opener).toBeFocused(); expect(errors).toEqual([]);
+});
+test('shared long select, disabled, radio, checkbox, focus trap, drawer and native submit contract', async ({page}) => {
+  await page.evaluate(() => {
+    const root=document.createElement('section'); root.id='qa-controls'; root.style.cssText='position:relative;margin-left:260px;background:white;z-index:10;width:490px'; document.body.append(root);
+    window.rimeUI.renderHTML(root, `<form id="qa-form" style="width:440px;padding:24px"><label>长选项<select aria-label="长选项" name="choice"><option value="long">用于检查长选项省略、箭头与右侧边框之间空白的非常长的桌面选项文字</option><option value="short">Short · 普通选项</option></select></label><input aria-label="禁用输入" disabled value="禁用状态"><input aria-label="禁用复选" type="checkbox" disabled checked><label><input type="radio" name="mode" value="a" checked>模式 A</label><label><input type="radio" name="mode" value="b">模式 B</label><input aria-label="勾选" name="check" type="checkbox"><button class="btn primary" id="qa-submit">提交</button><button class="btn" type="button" disabled>禁用按钮</button></form>`);
+    document.querySelector('#qa-form')!.addEventListener('submit', event => { event.preventDefault(); (window as any).qaData=Object.fromEntries(new FormData(event.target as HTMLFormElement)); });
+  });
+  const select=page.getByRole('combobox',{name:'长选项'}); await select.focus(); await page.keyboard.press('s'); await expect(select).toHaveValue('short');
+  await page.getByRole('radio',{name:'模式 B'}).check(); await page.getByRole('checkbox',{name:'勾选'}).check();
+  await page.locator('#qa-submit').click(); expect(await page.evaluate(()=>(window as any).qaData)).toEqual({choice:'short', mode:'b',check:'on'});
+  await expect(page.getByRole('textbox',{name:'禁用输入'})).toBeDisabled();
+  await expect(page.getByRole('checkbox',{name:'禁用复选'})).toBeChecked();
+  await select.selectOption('long'); await select.focus();
+  const spacing=await select.evaluate(el=>({padding:parseFloat(getComputedStyle(el).paddingRight), appearance:getComputedStyle(el).appearance}));
+  expect(spacing.padding).toBeGreaterThanOrEqual(36); expect(spacing.appearance).toBe('none');
+  const arrow = await select.locator('..').locator('.mantine-NativeSelect-section').boundingBox(); const bounds = await select.boundingBox(); expect(arrow!.x+arrow!.width).toBeLessThanOrEqual(bounds!.x+bounds!.width+1);
+  await page.locator('#qa-controls').screenshot({path:output+'/shared-states.png'});
+  await page.evaluate(()=>window.rimeUI.openOverlay('<div class="modalhead"><h2 id="dialog-title">抽屉验收</h2></div><div class="modalbody"><input aria-label="抽屉输入"><button class="btn mt">末尾按钮</button></div>','','drawer'));
+  await expect(page.getByRole('dialog',{name:'抽屉验收'})).toBeVisible();
+  await page.getByRole('textbox',{name:'抽屉输入'}).focus(); await page.keyboard.press('Shift+Tab');
+  expect(await page.getByRole('dialog').evaluate(el=>el.contains(document.activeElement))).toBe(true);
+  const rect=await page.getByRole('dialog').boundingBox(); expect(rect!.x).toBeGreaterThanOrEqual(0); expect(rect!.x+rect!.width).toBeLessThanOrEqual(1440);
+  await page.screenshot({path:output+'/drawer.png'}); await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('nested phrase editor preserves input collection, row actions, preview and backup save', async ({page}) => {
+  const errors: string[] = []; page.on('pageerror',e=>errors.push(e.message));
+  await page.locator('[data-view="library"]').click();
+  await page.locator('[data-library-tab="phrases"]').click();
+  await expect(page.locator('#library-edit-form')).toBeVisible();
+  await page.locator('[data-editor-add]').click();
+  const row = page.locator('[data-editor-row]').last();
+  await row.locator('[name="text"]').fill('隔离验收短语'); await row.locator('[name="code"]').fill('gl'); await row.locator('[name="weight"]').fill('100');
+  await page.locator('[data-editor-add]').click(); await page.locator('[data-editor-row]').last().locator('[data-editor-remove]').click();
+  await expect(page.locator('[name="text"]').last()).toHaveValue('隔离验收短语');
+  await page.locator('#library-edit-form [type="submit"]').click();
+  await expect(page.locator('#resource-apply')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveAccessibleName(/快捷短语/);
+  await page.screenshot({path:output+'/phrase-review.png'});
+  await page.locator('#resource-apply').click(); await expect(page.getByRole('dialog')).toHaveCount(0);
+  const files=await fs.readdir(process.env.RIME_QA_USER_DIR!); const phrases=files.find(name=>name.endsWith('_phrases.txt'))!;
+  expect(await fs.readFile(process.env.RIME_QA_USER_DIR+'/'+phrases,'utf8')).toContain('隔离验收短语\tgl\t100');
+  expect(errors).toEqual([]);
+});
