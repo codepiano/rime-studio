@@ -12,11 +12,18 @@
   },
   "prepare": [
     [
-      "npm",
-      "ci"
+      "node",
+      "scripts/check-toolchain.mjs"
     ],
     [
-      "npm",
+      "corepack",
+      "pnpm",
+      "install",
+      "--frozen-lockfile"
+    ],
+    [
+      "corepack",
+      "pnpm",
       "run",
       "build"
     ]
@@ -37,6 +44,10 @@
   "toolchain": [
     [
       "node",
+      "--version"
+    ],
+    [
+      "corepack",
       "--version"
     ]
   ],

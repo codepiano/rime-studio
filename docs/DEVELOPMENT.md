@@ -43,17 +43,19 @@ research-snapshots.json   固定提交的公开上游调研文件
 
 ## 本地开发
 
+使用 Node.js 24.15+（24.x）或 26.x、Corepack 0.36.0+，所有命令通过 `corepack pnpm` 使用锁定的 pnpm 12.15.0。仓库只有根包，没有独立子项目或现有 CI 配置。`pnpm-lock.yaml` 从 npm 锁文件导入，应用依赖的 168 个包名/版本及完整性哈希保持一致；包管理器启动依赖单独记录。`pnpm-workspace.yaml` 显式禁用 `fsevents` 的可选安装脚本（包自带原生二进制）。
+
 ```bash
-npm ci
-npm run typecheck
-npm test
-npm run test:ui
-npm start
+corepack pnpm install --frozen-lockfile
+corepack pnpm run typecheck
+corepack pnpm test
+corepack pnpm run test:ui
+corepack pnpm start
 ```
 
-前端修改需要 `npm run build`。类型检查覆盖新增公共 React 层、构建配置与浏览器测试；既有 JavaScript 控制器由原有测试和浏览器流程验证。仅在独立 checkout 中安装依赖、构建和验证，不在正在使用的服务目录中构建或刷新用户页面。启动器与生命周期脚本共用清单端口 4312；调试自定义端口使用终端前台启动。
+前端修改需要 `corepack pnpm run build`。类型检查覆盖新增公共 React 层、构建配置与浏览器测试；既有 JavaScript 控制器由原有测试和浏览器流程验证。仅在独立 checkout 中安装依赖、构建和验证，不在正在使用的服务目录中构建或刷新用户页面。启动器与生命周期脚本共用清单端口 4312；调试自定义端口使用终端前台启动。
 
-`npm run test:ui` 先构建，再自动分配独立回环端口并生成临时 Rime 用户目录、共享目录、工作台数据和浏览器存储，禁用真实部署。测试结束只清理本次进程与临时目录。默认使用 macOS Chrome 的独立无头进程，可用 `CHROME_PATH` 指定浏览器路径；不会连接个人 Chrome 会话。仅验证桌面。
+`corepack pnpm run test:ui` 先构建，再自动分配独立回环端口并生成临时 Rime 用户目录、共享目录、工作台数据和浏览器存储，禁用真实部署。测试结束只清理本次进程与临时目录。默认使用 macOS Chrome 的独立无头进程，可用 `CHROME_PATH` 指定浏览器路径；不会连接个人 Chrome 会话。仅验证桌面。
 
 公共组件只从 `frontend/ui` 导入。现有模板通过显式 `renderHTML` 映射为 Mantine 控件；保留原有 id/name/data 属性、原生表单语义、非受控值和事件绑定。重画前先从内向外卸载嵌套 React 根，避免异步页面切换残留。NativeSelect 保留原生选单和键盘行为；范围滑块、文件选择与隐藏字段继续保留原生语义。弹层改用 Modal，Drawer 由公共入口提供，当前没有待迁移的业务抽屉。
 
@@ -100,7 +102,7 @@ RIME_USER_DIR=/absolute/path/to/rime-fixture \
 RIME_SHARED_DIR=/absolute/path/to/shared-config \
 RIME_STUDIO_DATA_DIR=/absolute/path/to/studio-test-data \
 RIME_DISABLE_DEPLOY=1 \
-PORT=4320 npm start
+PORT=4320 corepack pnpm start
 ```
 
 内置默认服务仍是 macOS 布局。覆盖目录适合验证配置逻辑，不代表已支持其他平台客户端部署。

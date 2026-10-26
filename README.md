@@ -14,15 +14,15 @@
 
 - macOS，已经安装并使用鼠须管。
 - 已存在的 Rime 用户目录 `~/Library/Rime`。
-- Node.js 22.12 或以上；目前验证使用 Node.js 26。
-- npm。首次安装依赖需要联网，运行后使用本机服务。
+- Node.js 24.15+（24.x）或 26.x；目前验证使用 Node.js 26。
+- Corepack 0.36.0+、pnpm 12.15.0。先运行 `npm install --global corepack@0.36.0` 升级旧 Corepack，再执行以下命令；无需全局安装 pnpm。首次安装依赖需要联网，运行后使用本机服务。
 
 ```bash
 git clone https://github.com/codepiano/rime-studio.git
 cd rime-studio
-npm ci
-npm run build
-npm start
+corepack pnpm install --frozen-lockfile
+corepack pnpm run build
+corepack pnpm start
 ```
 
 打开 **<http://127.0.0.1:4312>**。
@@ -53,7 +53,7 @@ npm start
 ./scripts/uninstall.sh     # 停止并清理运行日志，保留依赖、设置和备份
 ```
 
-清单为 `control-panel.json`，服务严格监听 `127.0.0.1:4312`，端口占用时直接失败。PID、进程启动时间及命令保存在 `.runtime/`，日志为 `.runtime/server.log`。手动 `npm start` 启动的进程不会被脚本接管；请在原终端停止后再使用后台脚本。
+清单为 `control-panel.json`，服务严格监听 `127.0.0.1:4312`，端口占用时直接失败。PID、进程启动时间及命令保存在 `.runtime/`，日志为 `.runtime/server.log`。手动 `corepack pnpm start` 启动的进程不会被脚本接管；请在原终端停止后再使用后台脚本。
 
 `GET /control-panel/metrics` 返回服务自身的状态、时间、PID、运行时长和 Node 内存数据。项目没有自有 SQLite 数据库；`.data/` 保存工作台设置及配置备份。
 
@@ -116,12 +116,12 @@ npm start
 ## 开发与验证
 
 ```bash
-npm ci
-npm test
-npm start
+corepack pnpm install --frozen-lockfile
+corepack pnpm test
+corepack pnpm start
 ```
 
-目前 **136 项自动化测试**，覆盖配置读写、差异预览、恢复、外部变更、补丁冲突、词库与短语管理、系统词典接口、OpenCC 转换、符号反查、请求乱序、部署资源核对、统一搜索与原生隔离试输、更新合并、任务中断／取消／重试、完整备份浏览及迁移后的真实候选。
+目前 **138 项自动化测试**，覆盖配置读写、差异预览、恢复、外部变更、补丁冲突、词库与短语管理、系统词典接口、OpenCC 转换、符号反查、请求乱序、部署资源核对、统一搜索与原生隔离试输、更新合并、任务中断／取消／重试、完整备份浏览及迁移后的真实候选。
 
 已在 macOS / Squirrel 1.1.2 / Rime 1.16.0 环境完成首轮验证，并在隔离配置副本中用本机 `rime_deployer` 核对生成的候选数、语言状态、字形与标点配置。完整边界和证据见[验收记录](验收记录.md)。
 

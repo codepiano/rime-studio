@@ -17,3 +17,11 @@
 
 构建失败保留旧服务；停止失败阻止切换；切换后核验实际进程身份和运行版本。
 新脚本的提交、推送和在线切换是独立步骤，提交脚本不会自动重启正在运行的服务。
+
+Node 工具链要求 Node.js 24.15+（24.x）或 26.x、Corepack 0.36.0+。
+先升级 Corepack（`npm install --global corepack@0.36.0`），然后统一通过
+`corepack pnpm` 使用 package.json 锁定的 pnpm 12.15.0；不要依赖 PATH 中的 pnpm。
+prepare 先检查工具链，再执行冻结锁文件安装和生产构建。构建环境使用
+`pnpm_config_production=false`、独立的 `pnpm_config_store_dir`、
+`pnpm_config_enable_global_virtual_store=false` 和 `pnpm_config_package_import_method=copy`；
+`npm_config_cache` 仅供 npm 使用，Corepack 缓存同样隔离到发布存储。

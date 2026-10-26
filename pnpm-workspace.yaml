@@ -1,0 +1,3 @@
+# fsevents ships its native binary; deny its optional install script.
+allowBuilds:
+  fsevents: false

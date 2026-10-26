@@ -283,11 +283,13 @@ def build_env(directory):
     for key in CONFIG.get('runtimeEnvironment', {}):
         env.pop(key, None)
     env.update(build_values())
-    env['npm_config_production'] = 'false'
+    for key in ('production', 'store_dir', 'enable_global_virtual_store', 'package_import_method'):
+        env.pop('npm_config_' + key, None)
+    env['pnpm_config_production'] = 'false'
     cache = STORE.parent / '.build-cache'
     cache.mkdir(parents=True, exist_ok=True)
     env.update(XDG_CACHE_HOME=str(cache), PIP_CACHE_DIR=str(cache / 'pip'), npm_config_cache=str(cache / 'npm'),
-               npm_config_store_dir=str(cache / 'pnpm'), npm_config_enable_global_virtual_store='false', npm_config_package_import_method='copy', COREPACK_HOME=str(cache / 'corepack'),
+               pnpm_config_store_dir=str(cache / 'pnpm'), pnpm_config_enable_global_virtual_store='false', pnpm_config_package_import_method='copy', COREPACK_HOME=str(cache / 'corepack'),
                ELECTRON_CACHE=str(cache / 'electron'), GOCACHE=str(cache / 'go-build'),
                GOMODCACHE=str(cache / 'go-mod'), CLANG_MODULE_CACHE_PATH=str(cache / 'clang'),
                SWIFT_MODULECACHE_PATH=str(cache / 'swift'), PYTHONPYCACHEPREFIX=str(cache / 'python'))
