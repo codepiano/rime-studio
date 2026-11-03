@@ -26,3 +26,10 @@ test('a failed current query clears old rows rather than enabling destructive ac
  await mountLearned(root,{api(){if(initial){initial=false;return Promise.resolve(data('旧行'));}return Promise.reject(new Error('查询失败'));},notify(){}});
  await root.querySelector('#learned-hide-single').onchange({target:{checked:false}});assert.doesNotMatch(root.innerHTML,/旧行/);assert.match(root.innerHTML,/查询未完成：查询失败/);assert.match(root.innerHTML,/data-learn-delete disabled/);
 });
+test('new-word toggle resets pagination and sends the filter to queries and export',async()=>{
+ const root=rootStub(),urls=[];
+ await mountLearned(root,{api:async url=>{urls.push(url);if(url.startsWith('/api/learned/export'))throw new Error('stop download');return {...data('词条'),hasMore:true};},notify(){}});
+ await root.querySelector('[data-learn-next]').onclick();assert.match(urls.at(-1),/offset=100/);
+ await root.querySelector('#learned-only-new').onchange({target:{checked:true}});assert.match(urls.at(-1),/offset=0/);assert.match(urls.at(-1),/onlyNew=true/);assert.match(root.innerHTML,/id="learned-only-new"\s+checked/);
+ await root.querySelector('[data-learn-export]').onclick();assert.match(urls.at(-1),/onlyNew=true/);assert.match(urls.at(-1),/hideSingle=true/);assert.match(root.innerHTML,/不能证明是你亲自造的新词/);
+});

@@ -6,6 +6,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import YAML from 'yaml';
 import {digest,readText} from './file-transactions.js';
+import {LearnedBaseVocabulary} from './learned-base.js';
 const exec=promisify(execFile),fail=message=>{throw new Error(message);};
 const valid=name=>typeof name==='string'&&/^[\p{L}\p{N}_][\p{L}\p{N}_. -]{0,100}$/u.test(name)&&!name.includes('..');
 const characters=new Intl.Segmenter('zh',{granularity:'grapheme'});
@@ -118,12 +119,19 @@ export class LearnedManager{
    return {...this.query(),sync:{state:'unconfirmed',message:'同步请求已发送，但没有观察到快照更新；旧快照不能代表当前学习总量'}};
   }finally{this.busy=false;this.store.busy=false;}
  }
- query({dictionary='',q='',offset=0,deleted=false,hideSingle=false}={}){
+ async filteredQuery({onlyNew=false,...options}={},allRows=false){
+  if(typeof onlyNew!=='boolean')fail('无效学习词条查询');
+  this.query(options); // Validate before resolving dictionary paths or reading sources.
+  let known=null;
+  if(onlyNew){this.baseVocabulary??=new LearnedBaseVocabulary(this.store);known=await this.baseVocabulary.known([...this.cache.keys()].filter(name=>!options.dictionary||name===options.dictionary));}
+  return this.query(options,known,allRows);
+ }
+ query({dictionary='',q='',offset=0,deleted=false,hideSingle=false}={},known=null,allRows=false){
   if(typeof q!=='string'||q.length>100||!Number.isSafeInteger(offset)||offset<0||typeof deleted!=='boolean'||typeof hideSingle!=='boolean'||(dictionary&&!valid(dictionary)))fail('无效学习词条查询');
   const dictionaries=[...this.cache.values()].map(data=>({name:data.name,count:data.rows.filter(x=>!x.deleted).length,deletedCount:data.rows.filter(x=>x.deleted).length,hash:data.hash,source:data.source,time:data.time,canDelete:data.canDelete,error:data.error,syncObserved:!!data.syncObserved}));
-  const all=[...this.cache.values()].filter(x=>!dictionary||x.name===dictionary).flatMap(x=>x.rows.map(row=>({...row,canDelete:x.canDelete&&!row.deleted}))).filter(row=>(!hideSingle||!isSingleCharacter(row.text))&&(deleted||!row.deleted)&&(!q||row.text.includes(q)||row.code.includes(q))).sort((a,b)=>b.count-a.count||a.text.localeCompare(b.text));
+  const all=[...this.cache.values()].filter(x=>!dictionary||x.name===dictionary).flatMap(x=>x.rows.map(row=>({...row,canDelete:x.canDelete&&!row.deleted}))).filter(row=>(!known||!known.get(row.dictionary)?.has(row.text))&&(!hideSingle||!isSingleCharacter(row.text))&&(deleted||!row.deleted)&&(!q||row.text.includes(q)||row.code.includes(q))).sort((a,b)=>b.count-a.count||a.text.localeCompare(b.text));
   const live=dictionaries.filter(x=>x.source==='live').length,snapshots=dictionaries.filter(x=>x.source==='snapshot').length,unavailable=dictionaries.filter(x=>x.source==='unavailable').length;
-  return {coverage:{loaded:this.loaded,live,snapshots,unavailable,incomplete:!this.loaded||snapshots>0||unavailable>0},dictionaries,total:all.length,rows:all.slice(offset,offset+100),offset,hasMore:offset+100<all.length};
+  return {coverage:{loaded:this.loaded,live,snapshots,unavailable,incomplete:!this.loaded||snapshots>0||unavailable>0},dictionaries,total:all.length,rows:allRows?all:all.slice(offset,offset+100),offset,hasMore:offset+100<all.length};
  }
  async preview(body){
   if(this.busy||this.store.busy)fail('词典正在操作');this.busy=true;this.store.busy=true;try{
