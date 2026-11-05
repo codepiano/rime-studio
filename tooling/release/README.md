@@ -25,3 +25,15 @@ prepare 先检查工具链，再执行冻结锁文件安装和生产构建。构
 `pnpm_config_production=false`、独立的 `pnpm_config_store_dir`、
 `pnpm_config_enable_global_virtual_store=false` 和 `pnpm_config_package_import_method=copy`；
 `npm_config_cache` 仅供 npm 使用，Corepack 缓存同样隔离到发布存储。
+
+## 历史产物保留
+
+发布成功后自动保留当前成功版本及一个完整性校验通过的回滚版本，记录在项目存储的
+`retention.json`。首次接入时从当前版之前的构建中选择最近的有效版本；完整性校验不代表
+历史业务验收。准备阶段临时保留最新待激活产物，成功激活后再收敛到两版。
+
+运行中的其他版本始终保留；进程检查或回滚校验失败时跳过自动清理并输出警告，不影响
+已成功启动的服务。清理与构建共用锁，不修改已发布产物，不跟随用户数据链接。
+旧的未完成构建超过一天才清理；共享 `.build-cache` 不在本规则范围内。
+
+手动维护：`python3 tooling/release/adapter.py prune`。该命令不会停止或启动服务。
