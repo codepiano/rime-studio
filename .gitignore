@@ -14,3 +14,7 @@ work/
 dist/
 test-results/
 playwright-report/
+
+# Python bytecode caches
+__pycache__/
+*.py[cod]
